@@ -1,76 +1,40 @@
+import { Mesh, ColorCategory } from "@/types/index";
 
-import { Fabric, ColorCategory } from "@/types/index";
-
-export const MOCK_FABRICS: Fabric[] = [
+export const MOCK_FABRICS: Mesh[] = [
   {
-    id: 1,
-    supplier: "Urbano Têxtil",
-    name: "Meia Malha Penteada",
-    code: "013001",
-    technical_specs: {
-      width_cm: 120,
-      grammage_gsm: 160,
-      yield_m_kg: 2.60,
-      composition: "100% Algodão"
+    id: '1',
+    supplierId: '1',
+    code: 'MM30.1',
+    name: 'Meia Malha 30.1 Penteada',
+    composition: '100% Algodão',
+    width: 120,
+    grammage: 160,
+    yield: 2.60,
+    prices: {
+        [ColorCategory.Branco]: 45.90,
+        [ColorCategory.Claras]: 49.90,
+        [ColorCategory.EscurasFortes]: 55.90,
+        [ColorCategory.Preto]: 52.90
     },
-    price_list: [
-      { category: ColorCategory.Branco, price_kg: 50.22 },
-      { category: ColorCategory.Claras, price_kg: 53.53 },
-      { category: ColorCategory.EscurasFortes, price_kg: 55.68 },
-    ]
+    complement: 'Ribana 1x1',
+    imageUrl: 'https://placehold.co/600x400/png'
   },
   {
-    id: 2,
-    supplier: "Urbano Têxtil",
-    name: "Suedine 100% Algodão",
-    code: "76040",
-    technical_specs: {
-      width_cm: 185,
-      grammage_gsm: 210,
-      yield_m_kg: 2.57,
-      composition: "100% Algodão"
+    id: '2',
+    supplierId: '2',
+    code: 'PV28.1',
+    name: 'Malha PV Anti-pilling',
+    composition: '65% Poliéster 35% Viscose',
+    width: 120,
+    grammage: 175,
+    yield: 2.40,
+    prices: {
+        [ColorCategory.Branco]: 32.50,
+        [ColorCategory.Claras]: 34.50,
+        [ColorCategory.EscurasFortes]: 38.90,
+        [ColorCategory.Mescla]: 36.50
     },
-    price_list: [
-      { category: ColorCategory.Branco, price_kg: 66.01 },
-      { category: ColorCategory.Claras, price_kg: 67.71 },
-      { category: ColorCategory.EscurasFortes, price_kg: 70.76 },
-      { category: ColorCategory.Extras, price_kg: 73.56 }
-    ]
-  },
-  {
-    id: 3,
-    supplier: "FN Malhas",
-    name: "Moletom PA Peluciado",
-    code: "66",
-    technical_specs: {
-      width_cm: 184,
-      grammage_gsm: 310,
-      yield_m_kg: 1.75,
-      composition: "50% Algodão 50% Poliéster"
-    },
-    price_list: [
-      { category: ColorCategory.Claras, price_kg: 45.30 },
-      { category: ColorCategory.EscurasFortes, price_kg: 50.90 },
-      { category: ColorCategory.Especiais, price_kg: 54.50 },
-      { category: ColorCategory.Mescla, price_kg: 47.30 }
-    ]
-  },
-  {
-    id: 4,
-    supplier: "FN Malhas",
-    name: "Ribana 2x1 Penteada",
-    code: "230",
-    technical_specs: {
-      width_cm: 128,
-      grammage_gsm: 290,
-      yield_m_kg: 2.70,
-      composition: "97% Algodão 3% Elastano"
-    },
-    price_list: [
-      { category: ColorCategory.Claras, price_kg: 52.80 },
-      { category: ColorCategory.EscurasFortes, price_kg: 58.70 },
-      { category: ColorCategory.Especiais, price_kg: 62.10 },
-      { category: ColorCategory.Extras, price_kg: 65.00 }
-    ]
+    complement: 'Ribana PV',
+    imageUrl: 'https://placehold.co/600x400/png'
   }
 ];

@@ -12,7 +12,6 @@ interface BatchImporterProps {
   existingMeshes: Mesh[];
 }
 
-// CORREÇÃO: Alterado para export const para evitar erro de importação
 export const BatchImporter: React.FC<BatchImporterProps> = ({ supplier, onImport, onCancel, existingMeshes }) => {
   const [isDragOver, setIsDragOver] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
@@ -98,6 +97,7 @@ export const BatchImporter: React.FC<BatchImporterProps> = ({ supplier, onImport
           newPrices[key] = p.price_cash_kg;
       });
 
+      // CORREÇÃO: Accesso seguro ao complemento
       const newComplement = product.complement?.info || '';
 
       if (existingMesh) {
@@ -105,6 +105,7 @@ export const BatchImporter: React.FC<BatchImporterProps> = ({ supplier, onImport
           ...existingMesh,
           name: product.product_name,
           composition: product.composition,
+          // CORREÇÃO: Usar 'specs' e 'width_m'
           width: product.specs.width_m ? product.specs.width_m * 100 : existingMesh.width,
           grammage: product.specs.grammage_gsm || existingMesh.grammage,
           yield: product.specs.yield_m_kg || existingMesh.yield,
@@ -118,6 +119,7 @@ export const BatchImporter: React.FC<BatchImporterProps> = ({ supplier, onImport
           code: product.product_code,
           name: product.product_name,
           composition: product.composition,
+          // CORREÇÃO: Usar 'specs'
           width: product.specs.width_m ? product.specs.width_m * 100 : 0,
           grammage: product.specs.grammage_gsm || 0,
           yield: product.specs.yield_m_kg || 0,

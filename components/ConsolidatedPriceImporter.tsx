@@ -67,7 +67,6 @@ export const ConsolidatedPriceImporter: React.FC<ConsolidatedPriceImporterProps>
     productsToImport.forEach(product => {
       const existingMeshIndex = updatedMeshes.findIndex(m => m.code === product.code && m.supplierId === supplier.id);
       
-      // Converte lista de preços para Objeto
       const newPrices: Record<string, number> = {};
       product.price_list.forEach(p => {
           const key = String(p.category || p.original_label);
@@ -83,7 +82,7 @@ export const ConsolidatedPriceImporter: React.FC<ConsolidatedPriceImporterProps>
             width: product.specs?.width_m ? product.specs.width_m * 100 : existingMesh.width,
             grammage: product.specs?.grammage_gsm || existingMesh.grammage,
             yield: product.specs?.yield_m_kg || existingMesh.yield,
-            prices: newPrices, // Objeto atualizado
+            prices: newPrices,
         };
       } else {
         const newMesh: Mesh = {
@@ -96,7 +95,6 @@ export const ConsolidatedPriceImporter: React.FC<ConsolidatedPriceImporterProps>
           grammage: product.specs?.grammage_gsm || 0,
           yield: product.specs?.yield_m_kg || 0,
           composition: product.specs.composition || '',
-          // Campos opcionais
           complement: product.is_complement ? 'Acessório' : undefined
         };
         updatedMeshes.push(newMesh);
