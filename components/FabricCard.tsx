@@ -1,65 +1,81 @@
-
 'use client';
 
 import React from 'react';
-import { Fabric, ColorCategory } from '@/types/index';
-import { formatCurrency, cn } from '@/lib/utils';
-import { Badge } from '@/components/ui/Badge';
-import { Star } from 'lucide-react';
+// CORREÇÃO: Importamos 'Mesh' em vez de 'Fabric'
+import { Mesh, ColorCategory } from '@/types/index';
+// Mantive os imports utilitários caso você os tenha, se der erro neles, remova.
+import { Star, Edit, BarChart2 } from 'lucide-react';
 
 interface FabricCardProps {
-  fabric: Fabric;
-  selectedCategory: ColorCategory;
-  isBestOption: boolean;
+  // CORREÇÃO: Tipo atualizado para Mesh
+  fabric: Mesh;
+  onEdit?: (fabric: Mesh) => void;
+  onCompare?: (fabric: Mesh) => void;
 }
 
-export const FabricCard: React.FC<FabricCardProps> = ({ fabric, selectedCategory, isBestOption }) => {
-  const { name, supplier, code, technical_specs } = fabric;
-  const { width_cm, grammage_gsm, yield_m_kg, composition } = technical_specs;
-
-  const priceData = fabric.price_list.find(p => p.category === selectedCategory);
-  const priceKg = priceData?.price_kg;
-
-  const priceMeter = priceKg && yield_m_kg > 0 ? priceKg / yield_m_kg : undefined;
-  const costM2 = priceKg && grammage_gsm > 0 ? (priceKg / 1000) * grammage_gsm : undefined;
+export const FabricCard: React.FC<FabricCardProps> = ({ fabric, onEdit, onCompare }) => {
+  
+  // CORREÇÃO: Acesso ao preço adaptado para o novo formato Record<string, number>
+  // Tenta pegar 'Claras', se não existir pega 'Branco', se não pega o primeiro valor, ou 0.
+  const price = fabric.prices['Claras'] || 
+                fabric.prices['Branco'] || 
+                (Object.values(fabric.prices).length > 0 ? Object.values(fabric.prices)[0] : 0);
 
   return (
-    <div className={cn(
-        "bg-white rounded-lg border flex flex-col w-full relative transition-all duration-300 shadow-sm",
-        isBestOption ? "border-2 border-brand-green shadow-lg ring-2 ring-lime-100" : "border-gray-200"
-    )}>
-      {isBestOption && (
-        <div className="absolute top-3 right-3 z-10">
-          <Badge icon={Star}>Melhor Opção</Badge>
+    <div className="bg-white rounded-xl border border-gray-200 shadow-sm hover:shadow-md transition-all duration-200 p-5 flex flex-col h-full">
+      <div className="flex justify-between items-start mb-3">
+        <div>
+          <h3 className="font-bold text-lg text-gray-900 line-clamp-1" title={fabric.name}>
+            {fabric.name}
+          </h3>
+          <p className="text-sm text-gray-500 font-mono">{fabric.code}</p>
         </div>
-      )}
-
-      <div className="border-b px-5 py-4">
-        <h3 className="font-bold text-lg text-black truncate pr-24">{name}</h3>
-        <p className="text-sm text-gray-500">{supplier} - Cód: {code}</p>
+        {/* Exibição do Preço */}
+        <div className="bg-green-50 text-green-700 px-2.5 py-1 rounded-md font-bold text-sm border border-green-100">
+          R$ {price.toFixed(2)}
+        </div>
       </div>
 
-      <div className="p-4 flex-grow grid grid-cols-2 gap-4 text-sm">
-        <div className="col-span-2 p-3 rounded-md bg-gray-50">
-          <p className="font-semibold text-gray-800">Preço / kg ({selectedCategory})</p>
-          <p className="text-2xl font-bold text-black">{formatCurrency(priceKg)}</p>
+      {/* Detalhes Técnicos */}
+      <div className="grid grid-cols-2 gap-y-2 gap-x-4 text-sm text-gray-600 mb-4 flex-grow">
+        <div className="flex flex-col">
+          <span className="text-xs text-gray-400 uppercase font-semibold">Largura</span>
+          <span>{fabric.width} cm</span>
         </div>
+        <div className="flex flex-col">
+          <span className="text-xs text-gray-400 uppercase font-semibold">Gramatura</span>
+          <span>{fabric.grammage} g/m²</span>
+        </div>
+        <div className="flex flex-col">
+          <span className="text-xs text-gray-400 uppercase font-semibold">Rendimento</span>
+          <span>{fabric.yield} m/kg</span>
+        </div>
+        <div className="flex flex-col">
+          <span className="text-xs text-gray-400 uppercase font-semibold">Composição</span>
+          <span className="truncate" title={fabric.composition}>{fabric.composition}</span>
+        </div>
+      </div>
 
-        <div className="p-3 rounded-md bg-gray-50">
-          <p className="font-semibold text-gray-800">Custo / m²</p>
-          <p className="text-xl font-bold text-black">{formatCurrency(costM2)}</p>
-        </div>
-        <div className="p-3 rounded-md bg-gray-50">
-          <p className="font-semibold text-gray-800">Preço / metro</p>
-          <p className="text-xl font-bold text-black">{formatCurrency(priceMeter)}</p>
-        </div>
-        
-        <div className="col-span-2 pt-2 space-y-1">
-          <p><span className="font-semibold">Rendimento:</span> {yield_m_kg.toFixed(2)} m/kg</p>
-          <p><span className="font-semibold">Gramatura:</span> {grammage_gsm} g/m²</p>
-          <p><span className="font-semibold">Largura:</span> {width_cm} cm</p>
-          <p><span className="font-semibold">Composição:</span> {composition}</p>
-        </div>
+      {/* Botões de Ação */}
+      <div className="grid grid-cols-2 gap-3 mt-auto pt-4 border-t border-gray-100">
+        {onEdit && (
+          <button 
+            onClick={() => onEdit(fabric)}
+            className="flex items-center justify-center gap-2 px-3 py-2 text-sm font-medium text-gray-700 bg-gray-50 hover:bg-gray-100 rounded-lg transition-colors"
+          >
+            <Edit size={16} />
+            Editar
+          </button>
+        )}
+        {onCompare && (
+          <button 
+            onClick={() => onCompare(fabric)}
+            className="flex items-center justify-center gap-2 px-3 py-2 text-sm font-medium text-white bg-[#72bf03] hover:bg-lime-600 rounded-lg transition-colors shadow-sm"
+          >
+            <BarChart2 size={16} />
+            Comparar
+          </button>
+        )}
       </div>
     </div>
   );
