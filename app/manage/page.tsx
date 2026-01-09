@@ -1,85 +1,117 @@
-
 'use client';
 
 import React, { useState } from 'react';
-import { Supplier } from '@/types';
-import { INITIAL_SUPPLIERS } from '@/lib/constants';
+import { Supplier } from '@/types'; // Certifique-se que o types/index.ts está atualizado
+import { Trash2, Edit2, Plus, Save, X } from 'lucide-react';
 
-export default function ManageSuppliersPage() {
-  // Em um app real, isso viria de uma API e seria atualizado via mutações.
-  // Para esta migração, gerenciamos o estado localmente.
+// Dados iniciais mockados (se você não tiver persistência real ainda)
+const INITIAL_SUPPLIERS: Supplier[] = [
+  { id: '1', name: 'Urbano Têxtil', email: 'contato@urbano.com.br', phone: '(47) 3333-3333' },
+  { id: '2', name: 'FN Malhas', email: 'vendas@fnmalhas.com.br', phone: '(47) 4444-4444' },
+  { id: '3', name: 'Pengir Malhas', email: 'comercial@pengir.com.br', phone: '(47) 5555-5555' },
+];
+
+export default function ManageSuppliers() {
   const [suppliers, setSuppliers] = useState<Supplier[]>(INITIAL_SUPPLIERS);
-  const [name, setName] = useState('');
-  const [editingId, setEditingId] = useState<number | null>(null);
+  const [isAdding, setIsAdding] = useState(false);
+  const [newSupplierName, setNewSupplierName] = useState('');
+  
+  // CORREÇÃO: O ID agora é string, então o estado editingId deve aceitar string
+  const [editingId, setEditingId] = useState<string | null>(null);
+  const [editingName, setEditingName] = useState('');
 
-  const handleSubmit = (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!name.trim()) return;
-
-    if (editingId !== null) {
-      setSuppliers(suppliers.map(s => s.id === editingId ? { ...s, name } : s));
-      setEditingId(null);
-    } else {
-      const newSupplier: Supplier = {
-        id: Date.now(),
-        name,
-      };
-      setSuppliers([...suppliers, newSupplier]);
-    }
-    setName('');
+  const handleAdd = () => {
+    if (!newSupplierName.trim()) return;
+    
+    const newSupplier: Supplier = {
+      // CORREÇÃO: Converte number para string
+      id: Date.now().toString(), 
+      name: newSupplierName,
+      email: '',
+      phone: ''
+    };
+    
+    setSuppliers([...suppliers, newSupplier]);
+    setNewSupplierName('');
+    setIsAdding(false);
   };
 
   const handleEdit = (supplier: Supplier) => {
     setEditingId(supplier.id);
-    setName(supplier.name);
+    setEditingName(supplier.name);
   };
 
-  const handleDelete = (id: number) => {
-    setSuppliers(suppliers.filter(s => s.id !== id));
-  };
-
-  const handleCancelEdit = () => {
+  const handleSaveEdit = () => {
+    if (!editingName.trim()) return;
+    
+    setSuppliers(prev => prev.map(s => 
+      s.id === editingId ? { ...s, name: editingName } : s
+    ));
     setEditingId(null);
-    setName('');
-  }
+    setEditingName('');
+  };
+
+  const handleDelete = (id: string) => {
+    if (confirm('Tem certeza que deseja excluir este fornecedor?')) {
+      setSuppliers(prev => prev.filter(s => s.id !== id));
+    }
+  };
 
   return (
-    <div className="max-w-2xl mx-auto">
-      <h1 className="text-3xl font-bold text-black mb-6">Gerenciar Fornecedores</h1>
-      
-      <form onSubmit={handleSubmit} className="bg-white p-6 rounded-lg shadow-md mb-8 border">
-        <h2 className="text-xl font-semibold mb-4">{editingId ? 'Editando Fornecedor' : 'Adicionar Novo Fornecedor'}</h2>
-        <div className="flex flex-col sm:flex-row gap-4">
-          <input
-            type="text"
-            value={name}
-            onChange={e => setName(e.target.value)}
-            placeholder="Nome do Fornecedor"
-            className="flex-grow p-2 border rounded bg-white text-gray-900"
-            required
-          />
-          <div className="flex gap-2">
-            {editingId && (
-              <button type="button" onClick={handleCancelEdit} className="bg-gray-500 text-white font-bold py-2 px-4 rounded hover:bg-gray-600 transition-colors">
-                Cancelar
-              </button>
-            )}
-            <button type="submit" className="bg-[#72bf03] text-white font-bold py-2 px-4 rounded hover:bg-lime-600 transition-colors w-full">
-              {editingId ? 'Salvar' : 'Adicionar'}
-            </button>
-          </div>
-        </div>
-      </form>
+    <div className="max-w-4xl mx-auto p-6">
+      <h1 className="text-3xl font-bold text-gray-800 mb-8">Gerenciar Fornecedores</h1>
 
-      <div className="bg-white p-6 rounded-lg shadow-md border">
-        <h2 className="text-xl font-semibold mb-4">Lista de Fornecedores</h2>
-        <ul className="space-y-3">
+      <div className="bg-white rounded-lg shadow p-6 mb-6">
+        <div className="flex justify-between items-center mb-4">
+          <h2 className="text-xl font-semibold">Lista de Fornecedores</h2>
+          <button 
+            onClick={() => setIsAdding(true)}
+            className="flex items-center gap-2 bg-blue-600 text-white px-4 py-2 rounded hover:bg-blue-700 transition-colors"
+          >
+            <Plus size={20} /> Novo Fornecedor
+          </button>
+        </div>
+
+        {isAdding && (
+          <div className="mb-6 p-4 bg-blue-50 rounded flex gap-2 items-center">
+            <input 
+              type="text" 
+              placeholder="Nome do fornecedor" 
+              value={newSupplierName}
+              onChange={(e) => setNewSupplierName(e.target.value)}
+              className="flex-grow p-2 border rounded"
+            />
+            <button onClick={handleAdd} className="bg-green-600 text-white p-2 rounded hover:bg-green-700"><Save size={20} /></button>
+            <button onClick={() => setIsAdding(false)} className="bg-gray-400 text-white p-2 rounded hover:bg-gray-500"><X size={20} /></button>
+          </div>
+        )}
+
+        <ul className="space-y-2">
           {suppliers.map(supplier => (
-            <li key={supplier.id} className="flex justify-between items-center p-3 bg-gray-50 rounded-md">
-              <span className="text-gray-800">{supplier.name}</span>
-              <div className="space-x-2">
-                <button onClick={() => handleEdit(supplier)} className="text-blue-600 hover:text-blue-800 font-semibold">Editar</button>
-                <button onClick={() => handleDelete(supplier.id)} className="text-red-600 hover:text-red-800 font-semibold">Excluir</button>
+            <li key={supplier.id} className="flex justify-between items-center p-3 border rounded hover:bg-gray-50">
+              {editingId === supplier.id ? (
+                <div className="flex-grow flex gap-2 mr-2">
+                   <input 
+                      type="text" 
+                      value={editingName}
+                      onChange={(e) => setEditingName(e.target.value)}
+                      className="flex-grow p-1 border rounded"
+                    />
+                </div>
+              ) : (
+                <span className="font-medium text-lg">{supplier.name}</span>
+              )}
+
+              <div className="flex gap-2">
+                {editingId === supplier.id ? (
+                   <>
+                    <button onClick={handleSaveEdit} className="text-green-600 hover:bg-green-100 p-1 rounded"><Save size={18} /></button>
+                    <button onClick={() => setEditingId(null)} className="text-gray-500 hover:bg-gray-200 p-1 rounded"><X size={18} /></button>
+                   </>
+                ) : (
+                   <button onClick={() => handleEdit(supplier)} className="text-blue-600 hover:bg-blue-100 p-1 rounded"><Edit2 size={18} /></button>
+                )}
+                <button onClick={() => handleDelete(supplier.id)} className="text-red-500 hover:bg-red-100 p-1 rounded"><Trash2 size={18} /></button>
               </div>
             </li>
           ))}
@@ -87,4 +119,4 @@ export default function ManageSuppliersPage() {
       </div>
     </div>
   );
-};
+}
