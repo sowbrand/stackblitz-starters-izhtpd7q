@@ -1,6 +1,7 @@
+'use client';
 
 import React from 'react';
-import { Mesh, Supplier } from '../types';
+import { Mesh, Supplier } from '@/types';
 import { PlusCircle, UploadCloud, FileJson, RefreshCcw, Layers } from 'lucide-react';
 
 interface SupplierDetailProps {

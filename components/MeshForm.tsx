@@ -1,7 +1,8 @@
+'use client';
 
 import React from 'react';
-import { Mesh, Supplier, ColorCategory, PriceInfo, Color, ExtractedData } from '../types';
-import { extractDataFromFile } from '../services/geminiService';
+import { Mesh, Supplier, ColorCategory, PriceInfo, Color, ExtractedData } from '@/types';
+import { extractDataFromFile } from '@/services/geminiService';
 import { Upload, X, Plus, Info, Palette, Tag, CheckSquare } from 'lucide-react';
 
 interface MeshFormProps {

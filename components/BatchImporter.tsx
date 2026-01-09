@@ -1,7 +1,8 @@
+'use client';
 
 import React, { useState } from 'react';
-import { Supplier, Mesh, BatchProduct, PriceInfo } from '../types';
-import { extractBatchDataFromFiles } from '../services/geminiService';
+import { Supplier, Mesh, BatchProduct, PriceInfo } from '@/types';
+import { extractBatchDataFromFiles } from '@/services/geminiService';
 import { Upload, X, Layers } from 'lucide-react';
 
 interface BatchImporterProps {

@@ -1,7 +1,8 @@
+'use client';
 
 import React, { useState } from 'react';
-import { Supplier, Mesh, ConsolidatedProduct, PriceInfo, ColorCategory } from '../types';
-import { extractConsolidatedPriceListData } from '../services/geminiService';
+import { Supplier, Mesh, ConsolidatedProduct, PriceInfo, ColorCategory } from '@/types';
+import { extractConsolidatedPriceListData } from '@/services/geminiService';
 import { Upload, X, FileJson } from 'lucide-react';
 
 interface ConsolidatedPriceImporterProps {

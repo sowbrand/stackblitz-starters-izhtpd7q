@@ -1,7 +1,8 @@
+'use client';
 
 import React, { useState, useMemo } from 'react';
-import { Supplier, Mesh, PriceUpdateData, PriceInfo } from '../types';
-import { extractPriceUpdateData } from '../services/geminiService';
+import { Supplier, Mesh, PriceUpdateData, PriceInfo } from '@/types';
+import { extractPriceUpdateData } from '@/services/geminiService';
 import { Upload, X, RefreshCcw, CheckCircle, XCircle } from 'lucide-react';
 
 interface PriceUpdateImporterProps {
@@ -80,7 +81,7 @@ export const PriceUpdateImporter: React.FC<PriceUpdateImporterProps> = ({ suppli
                     price: p.price_cash_kg,
                 }));
 
-                // IMPORTANT: Only update prices, keep all other data intact.
+                // IMPORTANTE: Atualiza apenas os preços, mantém o restante
                 newMeshes[meshIndex] = {
                     ...newMeshes[meshIndex],
                     prices: newPrices,
