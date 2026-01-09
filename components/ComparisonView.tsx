@@ -1,7 +1,7 @@
 
 import React, { useState, useMemo, useEffect } from 'react';
 import { Mesh, Supplier, ColorCategory } from '../types';
-import { MESH_TYPES } from '../constants';
+import { MESH_TYPES } from '@/lib/constants';
 import { X, Plus, Star } from 'lucide-react';
 
 interface ComparisonViewProps {
