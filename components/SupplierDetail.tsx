@@ -107,7 +107,8 @@ export const SupplierDetail: React.FC<SupplierDetailProps> = ({ supplier, meshes
       ) : (
         <div className="text-center py-16 border-2 border-dashed rounded-lg">
             <h2 className="text-xl font-semibold text-gray-700">Nenhuma malha cadastrada para este fornecedor</h2>
-            <p className="text-gray-500 mt-2">Clique em "Adicionar Malha" ou "Importar Tabela" para começar.</p>
+            {/* CORREÇÃO AQUI: Trocamos as aspas duplas por &quot; */}
+            <p className="text-gray-500 mt-2">Clique em &quot;Adicionar Malha&quot; ou &quot;Importar Tabela&quot; para começar.</p>
         </div>
       )}
     </div>
