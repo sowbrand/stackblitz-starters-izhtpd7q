@@ -17,15 +17,18 @@ interface SupplierDetailProps {
 }
 
 const MeshCard: React.FC<{ mesh: Mesh; onEdit: () => void; onCompare: () => void }> = ({ mesh, onEdit, onCompare }) => {
-  const priceClaras = mesh.prices.find(p => p.colorCategory === 'Claras')?.price || 0;
-  const indications = mesh.usageIndications?.join(', ') || mesh.description;
+  // Acesso direto ao preço pela chave
+  const priceClaras = mesh.prices['Claras'] || mesh.prices['Branco'] || 0;
+  
+  // Exibição mais limpa
+  const indications = mesh.complement ? `Complemento: ${mesh.complement}` : '';
 
   return (
     <div className="bg-white border border-gray-200 rounded-lg shadow-sm hover:shadow-lg transition-shadow duration-300 p-4 flex flex-col justify-between">
       <div>
         <h3 className="text-lg font-bold text-black">{mesh.name}</h3>
         <p className="text-sm text-gray-500 mb-2">{mesh.code}</p>
-        <p className="text-sm mb-4">{indications}</p>
+        <p className="text-sm mb-4 text-gray-600 italic">{indications}</p>
         <div className="grid grid-cols-2 gap-2 text-sm mb-4">
           <div><span className="font-semibold">Largura:</span> {mesh.width} cm</div>
           <div><span className="font-semibold">Gramatura:</span> {mesh.grammage} g/m²</div>
@@ -35,8 +38,8 @@ const MeshCard: React.FC<{ mesh: Mesh; onEdit: () => void; onCompare: () => void
       </div>
       <div className="border-t pt-3 mt-auto">
         <p className="text-lg font-bold text-black mb-3">
-          R$ {priceClaras.toFixed(2)}
-          <span className="text-sm font-normal text-gray-500"> /kg (Cores Claras)</span>
+          {priceClaras > 0 ? `R$ ${priceClaras.toFixed(2)}` : 'R$ --'}
+          <span className="text-sm font-normal text-gray-500"> /kg (Base)</span>
         </p>
         <div className="flex space-x-2">
           <button onClick={onEdit} className="w-full bg-gray-200 text-gray-800 hover:bg-gray-300 font-bold py-2 px-4 rounded transition-colors duration-200">Editar</button>
@@ -107,7 +110,6 @@ export const SupplierDetail: React.FC<SupplierDetailProps> = ({ supplier, meshes
       ) : (
         <div className="text-center py-16 border-2 border-dashed rounded-lg">
             <h2 className="text-xl font-semibold text-gray-700">Nenhuma malha cadastrada para este fornecedor</h2>
-            {/* CORREÇÃO AQUI: Trocamos as aspas duplas por &quot; */}
             <p className="text-gray-500 mt-2">Clique em &quot;Adicionar Malha&quot; ou &quot;Importar Tabela&quot; para começar.</p>
         </div>
       )}

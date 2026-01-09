@@ -1,9 +1,9 @@
 'use client';
 
 import React, { useState, useMemo } from 'react';
-import { Supplier, Mesh, PriceUpdateData, PriceInfo } from '@/types';
+import { Supplier, Mesh, PriceUpdateData } from '@/types';
 import { extractPriceUpdateData } from '@/services/geminiService';
-import { Upload, X, RefreshCcw, CheckCircle, XCircle } from 'lucide-react';
+import { X, RefreshCcw, CheckCircle, XCircle, Loader2 } from 'lucide-react';
 
 interface PriceUpdateImporterProps {
   supplier: Supplier;
@@ -11,10 +11,6 @@ interface PriceUpdateImporterProps {
   setMeshes: React.Dispatch<React.SetStateAction<Mesh[]>>;
   onClose: () => void;
 }
-
-const Spinner: React.FC = () => (
-    <div className="animate-spin rounded-full h-5 w-5 border-b-2 border-white"></div>
-);
 
 export const PriceUpdateImporter: React.FC<PriceUpdateImporterProps> = ({ supplier, allMeshes, setMeshes, onClose }) => {
   const [isLoading, setIsLoading] = useState(false);
@@ -76,14 +72,18 @@ export const PriceUpdateImporter: React.FC<PriceUpdateImporterProps> = ({ suppli
             const meshIndex = newMeshes.findIndex(m => m.code === update.product_code && m.supplierId === supplier.id);
 
             if (meshIndex > -1) {
-                const newPrices: PriceInfo[] = update.price_list.map(p => ({
-                    colorCategory: p.category_normalized,
-                    price: p.price_cash_kg,
-                }));
+                const currentMesh = newMeshes[meshIndex];
+                const newPrices = { ...currentMesh.prices }; // Copia preços atuais
+                
+                // Sobrescreve com os novos
+                update.price_list.forEach(p => {
+                    const key = String(p.category_normalized);
+                    newPrices[key] = p.price_cash_kg;
+                });
 
-                // IMPORTANTE: Atualiza apenas os preços, mantém o restante
+                // Atualiza malha
                 newMeshes[meshIndex] = {
-                    ...newMeshes[meshIndex],
+                    ...currentMesh,
                     prices: newPrices,
                 };
                 updatedCount++;
@@ -108,7 +108,7 @@ export const PriceUpdateImporter: React.FC<PriceUpdateImporterProps> = ({ suppli
             <h2 className="text-xl font-semibold text-black mb-2">Atualizar Preços de Produtos Existentes (IA)</h2>
             <p className="text-gray-600 mb-4">Envie um arquivo de atualização. A IA irá identificar os produtos pelo código e extrair a nova tabela de preços.</p>
             <label htmlFor="file-upload" className="cursor-pointer inline-flex items-center justify-center bg-teal-600 text-white font-bold py-2 px-6 rounded-lg shadow-md hover:bg-teal-700 transition-colors duration-300">
-                {isLoading ? <Spinner /> : <RefreshCcw size={20} className="mr-2" />}
+                {isLoading ? <Loader2 className="animate-spin mr-2" /> : <RefreshCcw size={20} className="mr-2" />}
                 {isLoading ? 'Analisando Arquivo...' : 'Enviar Arquivo de Atualização'}
             </label>
             <input id="file-upload" type="file" className="hidden" onChange={handleFileChange} disabled={isLoading} accept=".pdf,.png,.jpg,.jpeg,.xlsx" />

@@ -1,6 +1,7 @@
+'use client';
 
 import React, { useState, useMemo, useEffect } from 'react';
-import { Mesh, Supplier, ColorCategory } from '../types';
+import { Mesh, Supplier, ColorCategory } from '@/types';
 import { MESH_TYPES } from '@/lib/constants';
 import { X, Plus, Star } from 'lucide-react';
 
@@ -15,14 +16,12 @@ type HighlightMetric = 'geral' | 'price_kg' | 'price_m' | 'cost_m2' | 'yield';
 const ComparisonCard: React.FC<{
   mesh: Mesh;
   supplierName: string;
-  onRemove: (id: number) => void;
+  onRemove: (id: string) => void;
   isWinner: boolean;
-  selectedCategory: ColorCategory;
+  selectedCategory: string;
 }> = ({ mesh, supplierName, onRemove, isWinner, selectedCategory }) => {
 
-  const selectedPriceData = mesh.prices.find(p => p.colorCategory === selectedCategory);
-  const priceKg = selectedPriceData?.price;
-
+  const priceKg = mesh.prices[selectedCategory];
   const priceMetre = priceKg !== undefined && mesh.yield > 0 ? priceKg / mesh.yield : undefined;
   const costM2 = priceKg !== undefined && mesh.grammage > 0 ? (priceKg / 1000) * mesh.grammage : undefined;
   
@@ -89,30 +88,28 @@ export const ComparisonView: React.FC<ComparisonViewProps> = ({ allMeshes, initi
   const [comparing, setComparing] = useState<Mesh[]>(initialMeshes);
   const [selectedType, setSelectedType] = useState<string>('');
   const [highlightedMetric, setHighlightedMetric] = useState<HighlightMetric>('geral');
-  const [selectedCategory, setSelectedCategory] = useState<ColorCategory>(ColorCategory.Claras);
+  const [selectedCategory, setSelectedCategory] = useState<string>('Claras'); // Valor padrão seguro
   
   const availableCategories = useMemo(() => {
-    const categories = new Set<ColorCategory>();
+    const categories = new Set<string>();
     comparing.forEach(mesh => {
-        mesh.prices.forEach(priceInfo => {
-            categories.add(priceInfo.colorCategory);
-        });
+        Object.keys(mesh.prices).forEach(cat => categories.add(cat));
     });
     const sorted = Array.from(categories).sort();
+    
+    // Atualiza a categoria selecionada se ela não existir nas novas opções
     if (sorted.length > 0 && !sorted.includes(selectedCategory)) {
-        setSelectedCategory(sorted[0]);
+        // Usa setTimeout para evitar erro de update durante render
+        setTimeout(() => setSelectedCategory(sorted[0]), 0);
     }
     return sorted;
   }, [comparing, selectedCategory]);
-
 
   useEffect(() => {
     if (initialMeshes.length > 0) {
       const firstMeshName = initialMeshes[0].name.toLowerCase();
       const foundType = MESH_TYPES.find(type => firstMeshName.includes(type.toLowerCase()));
-      if (foundType) {
-        setSelectedType(foundType);
-      }
+      if (foundType) setSelectedType(foundType);
     }
   }, [initialMeshes]);
 
@@ -126,7 +123,8 @@ export const ComparisonView: React.FC<ComparisonViewProps> = ({ allMeshes, initi
   const bestValues = useMemo(() => {
     if (comparing.length === 0) return null;
     
-    const getPrice = (mesh: Mesh) => mesh.prices.find(p => p.colorCategory === selectedCategory)?.price;
+    const getPrice = (mesh: Mesh) => mesh.prices[selectedCategory];
+    
     const getValidMeshes = (valueExtractor: (mesh: Mesh) => number | undefined) => 
         comparing.map(valueExtractor).filter((v): v is number => v !== undefined && v > 0);
 
@@ -149,12 +147,12 @@ export const ComparisonView: React.FC<ComparisonViewProps> = ({ allMeshes, initi
   }, [comparing, selectedCategory]);
 
   const addMeshToCompare = (mesh: Mesh) => setComparing(prev => [...prev, mesh]);
-  const removeMeshFromCompare = (id: number) => setComparing(prev => prev.filter(m => m.id !== id));
-  const getSupplierName = (id: number) => suppliers.find(s => s.id === id)?.name || 'Desconhecido';
+  const removeMeshFromCompare = (id: string) => setComparing(prev => prev.filter(m => m.id !== id));
+  const getSupplierName = (id: string) => suppliers.find(s => s.id === id)?.name || 'Desconhecido';
 
   const isBest = (mesh: Mesh, metric: HighlightMetric) => {
     if (!bestValues || comparing.length < 1) return false;
-    const price = mesh.prices.find(p => p.colorCategory === selectedCategory)?.price;
+    const price = mesh.prices[selectedCategory];
 
     if (price === undefined || price <= 0) return false;
 
@@ -167,7 +165,6 @@ export const ComparisonView: React.FC<ComparisonViewProps> = ({ allMeshes, initi
         case 'price_m': 
             return (price / (mesh.yield || Infinity)) === bestValues.price_m;
         case 'yield': 
-            // Yield is special, it doesn't depend on price. Higher is better.
             return mesh.yield === bestValues.yield;
         default: 
             return false;
@@ -191,7 +188,7 @@ export const ComparisonView: React.FC<ComparisonViewProps> = ({ allMeshes, initi
                 <label className="font-semibold block mb-1">Comparar Tabela de:</label>
                 <select 
                     value={selectedCategory} 
-                    onChange={e => setSelectedCategory(e.target.value as ColorCategory)} 
+                    onChange={e => setSelectedCategory(e.target.value)} 
                     className="w-full p-2 border rounded bg-white text-gray-900"
                     disabled={availableCategories.length === 0}
                 >
@@ -204,7 +201,11 @@ export const ComparisonView: React.FC<ComparisonViewProps> = ({ allMeshes, initi
             </div>
             <div className="flex-grow min-w-[200px]">
                 <label className="font-semibold block mb-1">Destacar melhor opção por:</label>
-                <select value={highlightedMetric} onChange={e => setHighlightedMetric(e.target.value as HighlightMetric)} className="w-full p-2 border rounded bg-white text-gray-900">
+                <select 
+                    value={highlightedMetric} 
+                    onChange={e => setHighlightedMetric(e.target.value as HighlightMetric)} 
+                    className="w-full p-2 border rounded bg-white text-gray-900"
+                >
                     <option value="geral">Geral (Custo-Benefício)</option>
                     <option value="price_kg">Preço / kg</option>
                     <option value="price_m">Preço / metro</option>

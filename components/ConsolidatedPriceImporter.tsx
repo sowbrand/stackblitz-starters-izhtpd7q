@@ -1,9 +1,9 @@
 'use client';
 
 import React, { useState } from 'react';
-import { Supplier, Mesh, ConsolidatedProduct, PriceInfo, ColorCategory } from '@/types';
+import { Supplier, Mesh, ConsolidatedProduct } from '@/types';
 import { extractConsolidatedPriceListData } from '@/services/geminiService';
-import { Upload, X, FileJson } from 'lucide-react';
+import { X, FileJson, Loader2 } from 'lucide-react';
 
 interface ConsolidatedPriceImporterProps {
   supplier: Supplier;
@@ -11,10 +11,6 @@ interface ConsolidatedPriceImporterProps {
   setMeshes: React.Dispatch<React.SetStateAction<Mesh[]>>;
   onClose: () => void;
 }
-
-const Spinner: React.FC = () => (
-    <div className="animate-spin rounded-full h-5 w-5 border-b-2 border-white"></div>
-);
 
 export const ConsolidatedPriceImporter: React.FC<ConsolidatedPriceImporterProps> = ({ supplier, allMeshes, setMeshes, onClose }) => {
   const [isLoading, setIsLoading] = useState(false);
@@ -71,10 +67,12 @@ export const ConsolidatedPriceImporter: React.FC<ConsolidatedPriceImporterProps>
     productsToImport.forEach(product => {
       const existingMeshIndex = updatedMeshes.findIndex(m => m.code === product.code && m.supplierId === supplier.id);
       
-      const newPrices: PriceInfo[] = product.price_list.map(p => ({
-          colorCategory: p.category,
-          price: p.price_cash,
-      }));
+      // Converte lista de preços para Objeto
+      const newPrices: Record<string, number> = {};
+      product.price_list.forEach(p => {
+          const key = String(p.category || p.original_label);
+          newPrices[key] = p.price_cash;
+      });
 
       if (existingMeshIndex > -1) {
         const existingMesh = updatedMeshes[existingMeshIndex];
@@ -85,11 +83,11 @@ export const ConsolidatedPriceImporter: React.FC<ConsolidatedPriceImporterProps>
             width: product.specs?.width_m ? product.specs.width_m * 100 : existingMesh.width,
             grammage: product.specs?.grammage_gsm || existingMesh.grammage,
             yield: product.specs?.yield_m_kg || existingMesh.yield,
-            prices: newPrices, // CRITICAL: Overwrite prices with the new consolidated list
+            prices: newPrices, // Objeto atualizado
         };
       } else {
         const newMesh: Mesh = {
-          id: Date.now() + Math.random(),
+          id: Date.now().toString() + Math.random(),
           name: product.name,
           code: product.code,
           supplierId: supplier.id,
@@ -98,7 +96,8 @@ export const ConsolidatedPriceImporter: React.FC<ConsolidatedPriceImporterProps>
           grammage: product.specs?.grammage_gsm || 0,
           yield: product.specs?.yield_m_kg || 0,
           composition: product.specs.composition || '',
-          description: '', shrinkage: '', rollWeight: 0, minOrder: 0, availableColors: [],
+          // Campos opcionais
+          complement: product.is_complement ? 'Acessório' : undefined
         };
         updatedMeshes.push(newMesh);
       }
@@ -120,7 +119,7 @@ export const ConsolidatedPriceImporter: React.FC<ConsolidatedPriceImporterProps>
             <h2 className="text-xl font-semibold text-black mb-2">Importar Tabela de Preços Consolidada (IA)</h2>
             <p className="text-gray-600 mb-4">Envie uma tabela complexa (e.g., FN Malhas) para agrupar produtos e extrair múltiplos preços.</p>
             <label htmlFor="file-upload" className="cursor-pointer inline-flex items-center justify-center bg-purple-600 text-white font-bold py-2 px-6 rounded-lg shadow-md hover:bg-purple-700 transition-colors duration-300">
-                {isLoading ? <Spinner /> : <FileJson size={20} className="mr-2" />}
+                {isLoading ? <Loader2 className="animate-spin mr-2" /> : <FileJson size={20} className="mr-2" />}
                 {isLoading ? 'Analisando Tabela...' : 'Enviar Arquivo'}
             </label>
             <input id="file-upload" type="file" className="hidden" onChange={handleFileChange} disabled={isLoading} accept=".pdf,.png,.jpg,.jpeg" />
