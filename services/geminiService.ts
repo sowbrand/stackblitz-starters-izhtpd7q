@@ -1,12 +1,12 @@
 import { GoogleGenerativeAI } from "@google/generative-ai";
 
-// --- IMPORTANTE: Importamos os tipos do seu projeto para garantir compatibilidade ---
-// Certifique-se de que todos esses tipos existem em '@/types' ou ajuste o caminho.
+// Importa os tipos definidos no seu projeto
 import { 
     ExtractedData, 
     BatchProduct, 
     ConsolidatedProduct, 
     PriceUpdateData,
+    PriceDatabaseEntry, // <--- Adicionado este tipo
     ColorCategory 
 } from '@/types';
 
@@ -31,7 +31,8 @@ const fileToBase64 = async (file: File): Promise<string> => {
 // --- Funções Exportadas ---
 
 /**
- * Usado em: MeshForm.tsx
+ * 1. Usado em: MeshForm.tsx
+ * Extrai dados de um único produto (imagem técnica + infos).
  */
 export async function extractDataFromFile(file: File): Promise<ExtractedData> {
     const apiKey = getApiKey();
@@ -40,7 +41,6 @@ export async function extractDataFromFile(file: File): Promise<ExtractedData> {
         console.warn("API_KEY not found. Using mock data for MeshForm.");
         return new Promise(resolve => {
             setTimeout(() => {
-                // O objeto abaixo deve bater EXATAMENTE com a interface ExtractedData em @/types
                 const mockResponse: any = {
                     "supplier": "Urbano Têxtil (Mock)",
                     "name": "MOLETOM PELUCIADO PA",
@@ -77,7 +77,45 @@ export async function extractDataFromFile(file: File): Promise<ExtractedData> {
 }
 
 /**
- * Usado em: ConsolidatedPriceImporter.tsx
+ * 2. Usado em: PriceListImporter.tsx (ESTA ERA A FUNÇÃO FALTANTE)
+ * Lê uma tabela de preços simples e converte para PriceDatabaseEntry.
+ */
+export async function extractPriceListData(file: File): Promise<PriceDatabaseEntry> {
+    const apiKey = getApiKey();
+
+    if (!apiKey) {
+        console.warn("API_KEY not found. Using mock data for PriceListImporter.");
+        return new Promise(resolve => {
+            setTimeout(() => {
+                const mockResponse: any = {
+                    "supplier_name": "Urbano Têxtil (Mock Price List)",
+                    "products": [
+                        {
+                            "product_code": "1001",
+                            "product_name": "MEIA MALHA PENTEADA",
+                            "composition": "100% ALGODÃO",
+                            "specs": { "width_m": 1.20, "grammage_gsm": 160 },
+                            "price_list": [
+                                { "category_normalized": ColorCategory.Branco, "original_category_name": "BRANCO", "price_cash_kg": 45.90 },
+                                { "category_normalized": ColorCategory.Claras, "original_category_name": "CLARA", "price_cash_kg": 49.90 },
+                                { "category_normalized": ColorCategory.EscurasFortes, "original_category_name": "ESCURA", "price_cash_kg": 55.90 }
+                            ]
+                        }
+                    ]
+                };
+                resolve(mockResponse as PriceDatabaseEntry);
+            }, 2000);
+        });
+    }
+
+    const ai = new GoogleGenerativeAI(apiKey);
+    // TODO: Lógica real
+    return {} as PriceDatabaseEntry;
+}
+
+/**
+ * 3. Usado em: ConsolidatedPriceImporter.tsx
+ * Lê tabelas complexas/consolidadas.
  */
 export async function extractConsolidatedPriceListData(file: File): Promise<ConsolidatedProduct[]> {
     const apiKey = getApiKey();
@@ -119,7 +157,8 @@ export async function extractConsolidatedPriceListData(file: File): Promise<Cons
 }
 
 /**
- * Usado em: PriceUpdateImporter.tsx
+ * 4. Usado em: PriceUpdateImporter.tsx
+ * Extrai apenas atualizações de preço.
  */
 export async function extractPriceUpdateData(file: File): Promise<PriceUpdateData[]> {
     const apiKey = getApiKey();
@@ -149,7 +188,8 @@ export async function extractPriceUpdateData(file: File): Promise<PriceUpdateDat
 }
 
 /**
- * Usado em: BatchImporter.tsx
+ * 5. Usado em: BatchImporter.tsx
+ * Processa múltiplos arquivos.
  */
 export async function extractBatchDataFromFiles(files: File[]): Promise<BatchProduct[]> {
     const apiKey = getApiKey();
@@ -186,8 +226,7 @@ export async function extractBatchDataFromFiles(files: File[]): Promise<BatchPro
         });
     }
 
-    // Lógica real para múltiplos arquivos
     const ai = new GoogleGenerativeAI(apiKey);
-    // ...
+    // Lógica real...
     return [];
 }
