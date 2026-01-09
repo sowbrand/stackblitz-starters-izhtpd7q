@@ -1,4 +1,3 @@
-
 import { GoogleGenAI, Type } from "@google/genai";
 import { ExtractedData, PriceInfo, ColorCategory, Color, ColorPalette, PriceDatabaseEntry, ConsolidatedProduct, PriceUpdateData, BatchProduct } from '../types';
 
@@ -104,7 +103,7 @@ const SINGLE_FILE_RESPONSE_SCHEMA = {
 
 
 export const extractDataFromFile = async (file: File): Promise<ExtractedData> => {
-    if (!process.env.API_KEY) {
+    if (!process.env.API_KEY && !process.env.NEXT_PUBLIC_GEMINI_API_KEY) {
         console.warn("API_KEY not found. Using mock data.");
         return new Promise(resolve => {
             setTimeout(() => {
@@ -137,12 +136,13 @@ export const extractDataFromFile = async (file: File): Promise<ExtractedData> =>
         });
     }
 
-    const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
+    // Fix: Allow checking public env var for client-side usage if needed
+    const apiKey = process.env.API_KEY || process.env.NEXT_PUBLIC_GEMINI_API_KEY;
+    const ai = new GoogleGenAI({ apiKey: apiKey! });
     const base64Data = await fileToBase64(file);
 
     const response = await ai.models.generateContent({
-        model: 'gemini-3-flash-preview',
-// Fix: Per Gemini API guidelines, `contents` should be an object with a `parts` array.
+        model: 'gemini-1.5-flash',
         contents: {
             parts: [
                 { text: SINGLE_FILE_PROMPT },
@@ -160,8 +160,9 @@ export const extractDataFromFile = async (file: File): Promise<ExtractedData> =>
         }
     });
 
-    // Fix: Use the `.text` property to get the string output, not the `text()` method.
-    const text = response.text.trim();
+    // FIX: Add Safe Check for undefined text
+    const text = (response.text || "").trim();
+    
     try {
         const jsonData = JSON.parse(text);
         if (Array.isArray(jsonData) && jsonData.length > 0) {
@@ -252,7 +253,7 @@ const PRICE_LIST_RESPONSE_SCHEMA = {
 };
 
 export const extractPriceListData = async (file: File): Promise<PriceDatabaseEntry> => {
-     if (!process.env.API_KEY) {
+     if (!process.env.API_KEY && !process.env.NEXT_PUBLIC_GEMINI_API_KEY) {
         console.warn("API_KEY not found. Using mock data for price list.");
         return new Promise(resolve => {
             setTimeout(() => {
@@ -287,12 +288,12 @@ export const extractPriceListData = async (file: File): Promise<PriceDatabaseEnt
         });
     }
 
-    const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
+    const apiKey = process.env.API_KEY || process.env.NEXT_PUBLIC_GEMINI_API_KEY;
+    const ai = new GoogleGenAI({ apiKey: apiKey! });
     const base64Data = await fileToBase64(file);
 
      const response = await ai.models.generateContent({
-        model: 'gemini-3-flash-preview',
-// Fix: Per Gemini API guidelines, `contents` should be an object with a `parts` array.
+        model: 'gemini-1.5-flash',
         contents: {
             parts: [
                 { text: PRICE_LIST_PROMPT },
@@ -310,8 +311,9 @@ export const extractPriceListData = async (file: File): Promise<PriceDatabaseEnt
         }
     });
 
-    // Fix: Use the `.text` property to get the string output, not the `text()` method.
-    const text = response.text.trim();
+    // FIX: Add Safe Check for undefined text
+    const text = (response.text || "").trim();
+    
     try {
         const jsonData = JSON.parse(text);
         if (Array.isArray(jsonData) && jsonData.length > 0) {
@@ -363,7 +365,7 @@ const CONSOLIDATED_PRICE_LIST_RESPONSE_SCHEMA = {
 };
 
 export const extractConsolidatedPriceListData = async (file: File): Promise<ConsolidatedProduct[]> => {
-    if (!process.env.API_KEY) {
+    if (!process.env.API_KEY && !process.env.NEXT_PUBLIC_GEMINI_API_KEY) {
         console.warn("API_KEY not found. Using mock data for consolidated price list.");
         return new Promise(resolve => {
             setTimeout(() => {
@@ -398,12 +400,12 @@ export const extractConsolidatedPriceListData = async (file: File): Promise<Cons
         });
     }
 
-    const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
+    const apiKey = process.env.API_KEY || process.env.NEXT_PUBLIC_GEMINI_API_KEY;
+    const ai = new GoogleGenAI({ apiKey: apiKey! });
     const base64Data = await fileToBase64(file);
 
      const response = await ai.models.generateContent({
-        model: 'gemini-3-flash-preview',
-// Fix: Per Gemini API guidelines, `contents` should be an object with a `parts` array.
+        model: 'gemini-1.5-flash',
         contents: {
             parts: [
                 { text: CONSOLIDATED_PRICE_LIST_PROMPT },
@@ -421,8 +423,9 @@ export const extractConsolidatedPriceListData = async (file: File): Promise<Cons
         }
     });
 
-    // Fix: Use the `.text` property to get the string output, not the `text()` method.
-    const text = response.text.trim();
+    // FIX: Add Safe Check for undefined text
+    const text = (response.text || "").trim();
+    
     try {
         const jsonData = JSON.parse(text);
         if (Array.isArray(jsonData)) {
@@ -480,7 +483,7 @@ const PRICE_UPDATE_RESPONSE_SCHEMA = {
 };
 
 export const extractPriceUpdateData = async (file: File): Promise<PriceUpdateData[]> => {
-    if (!process.env.API_KEY) {
+    if (!process.env.API_KEY && !process.env.NEXT_PUBLIC_GEMINI_API_KEY) {
         console.warn("API_KEY not found. Using mock data for price update.");
         return new Promise(resolve => {
             setTimeout(() => {
@@ -508,12 +511,12 @@ export const extractPriceUpdateData = async (file: File): Promise<PriceUpdateDat
         });
     }
 
-    const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
+    const apiKey = process.env.API_KEY || process.env.NEXT_PUBLIC_GEMINI_API_KEY;
+    const ai = new GoogleGenAI({ apiKey: apiKey! });
     const base64Data = await fileToBase64(file);
 
      const response = await ai.models.generateContent({
-        model: 'gemini-3-flash-preview',
-// Fix: Per Gemini API guidelines, `contents` should be an object with a `parts` array.
+        model: 'gemini-1.5-flash',
         contents: {
             parts: [
                 { text: PRICE_UPDATE_PROMPT },
@@ -531,8 +534,9 @@ export const extractPriceUpdateData = async (file: File): Promise<PriceUpdateDat
         }
     });
 
-    // Fix: Use the `.text` property to get the string output, not the `text()` method.
-    const text = response.text.trim();
+    // FIX: Add Safe Check for undefined text
+    const text = (response.text || "").trim();
+    
     try {
         const jsonData = JSON.parse(text);
         if (Array.isArray(jsonData)) {
@@ -620,7 +624,7 @@ const BATCH_IMPORT_RESPONSE_SCHEMA = {
 };
 
 export const extractBatchDataFromFiles = async (files: File[]): Promise<BatchProduct[]> => {
-    if (!process.env.API_KEY) {
+    if (!process.env.API_KEY && !process.env.NEXT_PUBLIC_GEMINI_API_KEY) {
         console.warn("API_KEY not found. Using mock data for batch import.");
         return new Promise(resolve => {
             setTimeout(() => {
@@ -663,7 +667,8 @@ export const extractBatchDataFromFiles = async (files: File[]): Promise<BatchPro
         });
     }
 
-    const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
+    const apiKey = process.env.API_KEY || process.env.NEXT_PUBLIC_GEMINI_API_KEY;
+    const ai = new GoogleGenAI({ apiKey: apiKey! });
 
     const imageParts = await Promise.all(
         [...files].map(async (file) => {
@@ -678,8 +683,7 @@ export const extractBatchDataFromFiles = async (files: File[]): Promise<BatchPro
     );
 
     const response = await ai.models.generateContent({
-        model: 'gemini-3-flash-preview',
-// Fix: Per Gemini API guidelines, `contents` should be an object with a `parts` array.
+        model: 'gemini-1.5-flash',
         contents: {
             parts: [
                 { text: BATCH_IMPORT_PROMPT },
@@ -692,8 +696,9 @@ export const extractBatchDataFromFiles = async (files: File[]): Promise<BatchPro
         }
     });
     
-    // Fix: Use the `.text` property to get the string output, not the `text()` method.
-    const text = response.text.trim();
+    // FIX: Add Safe Check for undefined text
+    const text = (response.text || "").trim();
+    
     try {
         const jsonData = JSON.parse(text);
         if (Array.isArray(jsonData)) {
