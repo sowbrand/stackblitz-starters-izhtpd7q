@@ -1,7 +1,7 @@
 'use client';
 
 import React, { useState, useMemo } from 'react';
-import { Supplier, Mesh, ColorCategory } from '@/types';
+import { Supplier, Mesh } from '@/types';
 import { SupplierDetail } from '@/components/SupplierDetail';
 import { MeshForm } from '@/components/MeshForm';
 import { ComparisonView } from '@/components/ComparisonView';
@@ -9,50 +9,17 @@ import { BatchImporter } from '@/components/BatchImporter';
 import { PriceListImporter } from '@/components/PriceListImporter';
 import { ConsolidatedPriceImporter } from '@/components/ConsolidatedPriceImporter';
 import { PriceUpdateImporter } from '@/components/PriceUpdateImporter';
-
-// --- MOCK DATA (Para simular o banco de dados) ---
-const MOCK_SUPPLIERS: Supplier[] = [
-  { id: '1', name: 'Urbano Têxtil', email: 'contato@urbano.com.br', phone: '(47) 3333-3333' },
-  { id: '2', name: 'FN Malhas', email: 'vendas@fnmalhas.com.br', phone: '(47) 4444-4444' },
-  { id: '3', name: 'Pengir Malhas', email: 'comercial@pengir.com.br', phone: '(47) 5555-5555' },
-];
-
-const MOCK_MESHES: Mesh[] = [
-  {
-    id: '101',
-    supplierId: '2', // FN Malhas
-    code: '66',
-    name: 'MOLETOM PA PELUCIADO RAMADO',
-    composition: '50% ALG 50% POL',
-    width: 184,
-    grammage: 310,
-    yield: 1.75,
-    prices: { 'Claras': 45.30, 'EscurasFortes': 50.90 },
-    complement: ''
-  },
-  {
-    id: '102',
-    supplierId: '2', // FN Malhas
-    code: '230',
-    name: 'RIBANA 2X1 PENTEADA',
-    composition: '97% ALG 3% ELAST',
-    width: 128,
-    grammage: 290,
-    yield: 2.70,
-    prices: { 'Claras': 52.80 },
-    complement: 'Acessório'
-  }
-];
+import { INITIAL_SUPPLIERS, INITIAL_MESHES } from '@/lib/constants';
 
 export default function SupplierPage({ params }: { params: { id: string } }) {
-  // CORREÇÃO 1: O ID agora é tratado como string, sem converter para Number()
-  const supplierId = params.id;
+  // Garante que o ID da URL é string
+  const supplierId = String(params.id);
 
-  // Estados locais para simular persistência
-  const [suppliers] = useState<Supplier[]>(MOCK_SUPPLIERS);
-  const [meshes, setMeshes] = useState<Mesh[]>(MOCK_MESHES);
+  // Usa as constantes globais como estado inicial
+  const [suppliers] = useState<Supplier[]>(INITIAL_SUPPLIERS);
+  const [meshes, setMeshes] = useState<Mesh[]>(INITIAL_MESHES);
 
-  // Estados de controle de UI (Modais)
+  // Modais
   const [isEditingMesh, setIsEditingMesh] = useState<Mesh | null>(null);
   const [isAddingMesh, setIsAddingMesh] = useState(false);
   const [isComparing, setIsComparing] = useState<Mesh | null>(null);
@@ -61,15 +28,31 @@ export default function SupplierPage({ params }: { params: { id: string } }) {
   const [showPriceUpdateImporter, setShowPriceUpdateImporter] = useState(false);
   const [showBatchImporter, setShowBatchImporter] = useState(false);
 
-  // CORREÇÃO 2: Comparação string === string (antes dava erro string === number)
-  const supplier = useMemo(() => suppliers.find(s => s.id === supplierId), [suppliers, supplierId]);
-  const supplierMeshes = useMemo(() => meshes.filter(m => m.supplierId === supplierId), [meshes, supplierId]);
+  // Busca o fornecedor na lista oficial
+  const supplier = useMemo(() => {
+    return suppliers.find(s => String(s.id) === supplierId);
+  }, [suppliers, supplierId]);
+
+  const supplierMeshes = useMemo(() => {
+    return meshes.filter(m => String(m.supplierId) === supplierId);
+  }, [meshes, supplierId]);
 
   if (!supplier) {
-    return <div className="p-8 text-center text-red-500 font-bold">Fornecedor não encontrado</div>;
+    return (
+        <div className="flex flex-col items-center justify-center min-h-screen text-gray-500">
+            <h1 className="text-2xl font-bold mb-2">Fornecedor não encontrado</h1>
+            <p>ID Procurado: {supplierId}</p>
+            <div className="mt-4 p-4 bg-gray-100 rounded text-left text-sm">
+                <p className="font-bold">IDs disponíveis:</p>
+                <ul>
+                    {suppliers.map(s => <li key={s.id}>{s.id} - {s.name}</li>)}
+                </ul>
+            </div>
+            <a href="/" className="mt-6 px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700">Voltar para o início</a>
+        </div>
+    );
   }
 
-  // Handlers
   const handleSaveMesh = (mesh: Mesh) => {
     if (isEditingMesh) {
       setMeshes(prev => prev.map(m => m.id === mesh.id ? mesh : m));
@@ -88,7 +71,6 @@ export default function SupplierPage({ params }: { params: { id: string } }) {
 
   return (
     <div className="min-h-screen bg-gray-50 p-6">
-      {/* VISTA PRINCIPAL */}
       {!isComparing && !isEditingMesh && !isAddingMesh && 
        !showPriceListImporter && !showConsolidatedImporter && 
        !showPriceUpdateImporter && !showBatchImporter && (
@@ -105,8 +87,6 @@ export default function SupplierPage({ params }: { params: { id: string } }) {
         />
       )}
 
-      {/* MODAIS E TELAS SECUNDÁRIAS */}
-      
       {(isAddingMesh || isEditingMesh) && (
         <MeshForm 
           onSubmit={handleSaveMesh}

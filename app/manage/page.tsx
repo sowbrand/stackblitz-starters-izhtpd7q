@@ -1,116 +1,107 @@
 'use client';
 
 import React, { useState } from 'react';
-import { Supplier } from '@/types';
-// IMPORTANTE: Importando a lista oficial
-import { INITIAL_SUPPLIERS } from '@/lib/constants'; 
-import { Trash2, Edit2, Plus, Save, X } from 'lucide-react';
+import { Mesh, Supplier } from '@/types';
+import { INITIAL_MESHES, INITIAL_SUPPLIERS, MESH_TYPES } from '@/lib/constants';
+import { FabricCard } from '@/components/FabricCard';
+import { Search, Filter, SlidersHorizontal } from 'lucide-react';
+import Link from 'next/link';
 
-export default function ManageSuppliers() {
-  // Inicializa o estado com a lista GLOBAL, não uma lista vazia ou mockada localmente
-  const [suppliers, setSuppliers] = useState<Supplier[]>(INITIAL_SUPPLIERS);
-  
-  const [isAdding, setIsAdding] = useState(false);
-  const [newSupplierName, setNewSupplierName] = useState('');
-  const [editingId, setEditingId] = useState<string | null>(null);
-  const [editingName, setEditingName] = useState('');
+export default function Home() {
+  const [searchTerm, setSearchTerm] = useState('');
+  const [selectedType, setSelectedType] = useState('');
+  const [meshes] = useState<Mesh[]>(INITIAL_MESHES);
 
-  const handleAdd = () => {
-    if (!newSupplierName.trim()) return;
+  const filteredMeshes = meshes.filter(mesh => {
+    const matchesSearch = mesh.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
+                          mesh.code.toLowerCase().includes(searchTerm.toLowerCase());
+    const matchesType = selectedType ? mesh.name.toLowerCase().includes(selectedType.toLowerCase()) : true;
     
-    const newSupplier: Supplier = {
-      id: Date.now().toString(), 
-      name: newSupplierName,
-      email: '',
-      phone: ''
-    };
-    
-    setSuppliers([...suppliers, newSupplier]);
-    setNewSupplierName('');
-    setIsAdding(false);
-  };
+    return matchesSearch && matchesType;
+  });
 
-  const handleEdit = (supplier: Supplier) => {
-    setEditingId(supplier.id);
-    setEditingName(supplier.name);
-  };
-
-  const handleSaveEdit = () => {
-    if (!editingName.trim()) return;
-    
-    setSuppliers(prev => prev.map(s => 
-      s.id === editingId ? { ...s, name: editingName } : s
-    ));
-    setEditingId(null);
-    setEditingName('');
-  };
-
-  const handleDelete = (id: string) => {
-    if (confirm('Tem certeza que deseja excluir este fornecedor?')) {
-      setSuppliers(prev => prev.filter(s => s.id !== id));
-    }
+  const getSupplierName = (id: string) => {
+    return INITIAL_SUPPLIERS.find(s => String(s.id) === String(id))?.name || 'Fornecedor Desconhecido';
   };
 
   return (
-    <div className="max-w-4xl mx-auto p-6">
-      <h1 className="text-3xl font-bold text-gray-800 mb-8">Gerenciar Fornecedores</h1>
+    <main className="min-h-screen bg-gray-50">
+      <div className="bg-white border-b sticky top-0 z-10">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
+          <div className="flex flex-col md:flex-row justify-between items-center gap-4">
+            <h1 className="text-2xl font-bold text-gray-900">Catálogo de Malhas</h1>
+            
+            <div className="flex gap-2 w-full md:w-auto">
+              <Link href="/compare" className="px-4 py-2 bg-blue-600 text-white rounded-lg font-medium hover:bg-blue-700 transition-colors">
+                Comparador
+              </Link>
+              <Link href="/manage" className="px-4 py-2 bg-gray-800 text-white rounded-lg font-medium hover:bg-gray-900 transition-colors">
+                Gerenciar
+              </Link>
+            </div>
+          </div>
 
-      <div className="bg-white rounded-lg shadow p-6 mb-6">
-        <div className="flex justify-between items-center mb-4">
-          <h2 className="text-xl font-semibold">Lista de Fornecedores ({suppliers.length})</h2>
-          <button 
-            onClick={() => setIsAdding(true)}
-            className="flex items-center gap-2 bg-blue-600 text-white px-4 py-2 rounded hover:bg-blue-700 transition-colors"
-          >
-            <Plus size={20} /> Novo Fornecedor
-          </button>
+          <div className="mt-6 flex flex-col md:flex-row gap-4">
+            <div className="relative flex-grow">
+              <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400" size={20} />
+              <input 
+                type="text" 
+                placeholder="Buscar por nome, código..." 
+                className="w-full pl-10 pr-4 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none"
+                value={searchTerm}
+                onChange={(e) => setSearchTerm(e.target.value)}
+              />
+            </div>
+            
+            <div className="relative min-w-[200px]">
+              <Filter className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400" size={20} />
+              <select 
+                className="w-full pl-10 pr-8 py-2 border rounded-lg appearance-none bg-white focus:ring-2 focus:ring-blue-500 outline-none cursor-pointer"
+                value={selectedType}
+                onChange={(e) => setSelectedType(e.target.value)}
+              >
+                <option value="">Todos os Tipos</option>
+                {MESH_TYPES.map(type => (
+                  <option key={type} value={type}>{type}</option>
+                ))}
+              </select>
+              <SlidersHorizontal className="absolute right-3 top-1/2 transform -translate-y-1/2 text-gray-400 pointer-events-none" size={16} />
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+        <div className="mb-4 text-sm text-gray-500">
+          Mostrando {filteredMeshes.length} resultados
         </div>
 
-        {isAdding && (
-          <div className="mb-6 p-4 bg-blue-50 rounded flex gap-2 items-center">
-            <input 
-              type="text" 
-              placeholder="Nome do fornecedor" 
-              value={newSupplierName}
-              onChange={(e) => setNewSupplierName(e.target.value)}
-              className="flex-grow p-2 border rounded"
-            />
-            <button onClick={handleAdd} className="bg-green-600 text-white p-2 rounded hover:bg-green-700"><Save size={20} /></button>
-            <button onClick={() => setIsAdding(false)} className="bg-gray-400 text-white p-2 rounded hover:bg-gray-500"><X size={20} /></button>
+        {filteredMeshes.length > 0 ? (
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
+            {filteredMeshes.map((mesh) => (
+              <div key={mesh.id} className="group relative">
+                <Link href={`/suppliers/${mesh.supplierId}`} className="block h-full">
+                  <FabricCard fabric={mesh} />
+                </Link>
+                <div className="absolute top-2 right-2 bg-white/90 backdrop-blur-sm px-2 py-1 rounded text-xs font-semibold text-gray-600 shadow-sm">
+                  {getSupplierName(mesh.supplierId)}
+                </div>
+              </div>
+            ))}
+          </div>
+        ) : (
+          <div className="text-center py-20">
+            <p className="text-xl text-gray-600 font-medium">Nenhuma malha encontrada</p>
+            <p className="text-gray-400 mt-2">Tente ajustar os filtros ou buscar por outro termo.</p>
+            <button 
+              onClick={() => { setSearchTerm(''); setSelectedType(''); }}
+              className="mt-4 text-blue-600 hover:underline"
+            >
+              Limpar filtros
+            </button>
           </div>
         )}
-
-        <ul className="space-y-2">
-          {suppliers.map(supplier => (
-            <li key={supplier.id} className="flex justify-between items-center p-3 border rounded hover:bg-gray-50">
-              {editingId === supplier.id ? (
-                <div className="flex-grow flex gap-2 mr-2">
-                   <input 
-                      type="text" 
-                      value={editingName}
-                      onChange={(e) => setEditingName(e.target.value)}
-                      className="flex-grow p-1 border rounded"
-                    />
-                </div>
-              ) : (
-                <span className="font-medium text-lg">{supplier.name}</span>
-              )}
-
-              <div className="flex gap-2">
-                {editingId === supplier.id ? (
-                   <>
-                    <button onClick={handleSaveEdit} className="text-green-600 hover:bg-green-100 p-1 rounded"><Save size={18} /></button>
-                    <button onClick={() => setEditingId(null)} className="text-gray-500 hover:bg-gray-200 p-1 rounded"><X size={18} /></button>
-                   </>
-                ) : (
-                   <button onClick={() => handleEdit(supplier)} className="text-blue-600 hover:bg-blue-100 p-1 rounded"><Edit2 size={18} /></button>
-                )}
-                <button onClick={() => handleDelete(supplier.id)} className="text-red-500 hover:bg-red-100 p-1 rounded"><Trash2 size={18} /></button>
-              </div>
-            </li>
-          ))}
-        </ul>
       </div>
-    </div>
+    </main>
   );
 }
