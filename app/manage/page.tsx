@@ -1,22 +1,17 @@
 'use client';
 
 import React, { useState } from 'react';
-import { Supplier } from '@/types'; // Certifique-se que o types/index.ts está atualizado
+import { Supplier } from '@/types';
+// IMPORTANTE: Importando a lista oficial
+import { INITIAL_SUPPLIERS } from '@/lib/constants'; 
 import { Trash2, Edit2, Plus, Save, X } from 'lucide-react';
 
-// Dados iniciais mockados (se você não tiver persistência real ainda)
-const INITIAL_SUPPLIERS: Supplier[] = [
-  { id: '1', name: 'Urbano Têxtil', email: 'contato@urbano.com.br', phone: '(47) 3333-3333' },
-  { id: '2', name: 'FN Malhas', email: 'vendas@fnmalhas.com.br', phone: '(47) 4444-4444' },
-  { id: '3', name: 'Pengir Malhas', email: 'comercial@pengir.com.br', phone: '(47) 5555-5555' },
-];
-
 export default function ManageSuppliers() {
+  // Inicializa o estado com a lista GLOBAL, não uma lista vazia ou mockada localmente
   const [suppliers, setSuppliers] = useState<Supplier[]>(INITIAL_SUPPLIERS);
+  
   const [isAdding, setIsAdding] = useState(false);
   const [newSupplierName, setNewSupplierName] = useState('');
-  
-  // CORREÇÃO: O ID agora é string, então o estado editingId deve aceitar string
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editingName, setEditingName] = useState('');
 
@@ -24,7 +19,6 @@ export default function ManageSuppliers() {
     if (!newSupplierName.trim()) return;
     
     const newSupplier: Supplier = {
-      // CORREÇÃO: Converte number para string
       id: Date.now().toString(), 
       name: newSupplierName,
       email: '',
@@ -63,7 +57,7 @@ export default function ManageSuppliers() {
 
       <div className="bg-white rounded-lg shadow p-6 mb-6">
         <div className="flex justify-between items-center mb-4">
-          <h2 className="text-xl font-semibold">Lista de Fornecedores</h2>
+          <h2 className="text-xl font-semibold">Lista de Fornecedores ({suppliers.length})</h2>
           <button 
             onClick={() => setIsAdding(true)}
             className="flex items-center gap-2 bg-blue-600 text-white px-4 py-2 rounded hover:bg-blue-700 transition-colors"
