@@ -2,14 +2,13 @@
 
 import React from 'react';
 import Link from 'next/link';
-// Importação com caminho relativo correto para o StackBlitz
+// Caminho relativo para garantir funcionamento
 import { useSupplierContext } from './context/SupplierContext';
-import { ChevronRight, Package, Settings, Users } from 'lucide-react';
+import { ChevronRight, Package, Settings, Users, CheckCircle2 } from 'lucide-react';
 
 export default function Home() {
   const { suppliers, meshes } = useSupplierContext();
 
-  // Função auxiliar para mostrar quantos produtos cada fornecedor tem
   const getMeshCount = (supplierId: string) => {
     return meshes.filter(m => String(m.supplierId) === String(supplierId)).length;
   };
@@ -17,17 +16,16 @@ export default function Home() {
   return (
     <main className="min-h-screen bg-gray-50 p-6">
       <div className="max-w-6xl mx-auto">
-        {/* Cabeçalho da Aba 1 */}
+        {/* Cabeçalho */}
         <div className="flex flex-col md:flex-row justify-between items-center mb-8 gap-4">
           <div>
             <h1 className="text-3xl font-bold text-gray-900 flex items-center gap-2">
               <Users className="text-blue-600" />
               Fornecedores
             </h1>
-            <p className="text-gray-500 mt-2">Selecione um fornecedor para ver produtos e importar tabelas.</p>
+            <p className="text-gray-500 mt-2">Gerencie seus parceiros e importações.</p>
           </div>
           
-          {/* Botão de Atalho para a Aba 3 (Gerenciar) */}
           <Link 
             href="/manage" 
             className="flex items-center gap-2 text-gray-700 bg-white border border-gray-300 px-4 py-2 rounded-lg hover:bg-gray-50 hover:text-blue-600 font-medium transition-colors shadow-sm"
@@ -37,7 +35,7 @@ export default function Home() {
           </Link>
         </div>
 
-        {/* Grid de Fornecedores */}
+        {/* Grid */}
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
           {suppliers.map((supplier) => (
             <Link 
@@ -46,7 +44,6 @@ export default function Home() {
               className="group block h-full"
             >
               <div className="bg-white rounded-xl p-6 shadow-sm border border-gray-200 hover:border-blue-500 hover:shadow-md transition-all h-full flex flex-col justify-between cursor-pointer relative overflow-hidden">
-                {/* Detalhe visual de hover */}
                 <div className="absolute top-0 left-0 w-1 h-full bg-blue-500 transform -translate-x-1 transition-transform group-hover:translate-x-0"></div>
 
                 <div>
@@ -61,20 +58,20 @@ export default function Home() {
                     {supplier.name}
                   </h3>
                   <div className="text-sm text-gray-500 mb-4">
-                    {supplier.email || '• Clique para acessar a área de uploads'}
+                    {supplier.email || '• Clique para acessar uploads'}
                   </div>
                 </div>
 
                 <div className="pt-4 border-t border-gray-50 flex items-center gap-2 text-sm text-gray-600">
                   <Package size={16} className="text-gray-400" />
                   <span className="font-bold text-gray-900">{getMeshCount(supplier.id)}</span> 
-                  <span className="text-gray-500">produtos cadastrados</span>
+                  <span className="text-gray-500">produtos</span>
                 </div>
               </div>
             </Link>
           ))}
 
-          {/* Card Atalho para Adicionar Novo */}
+          {/* Card Novo */}
           <Link 
             href="/manage"
             className="group block border-2 border-dashed border-gray-300 rounded-xl p-6 flex flex-col items-center justify-center text-center hover:border-blue-400 hover:bg-blue-50 transition-all min-h-[200px]"
@@ -83,13 +80,15 @@ export default function Home() {
               <Settings size={24} />
             </div>
             <h3 className="text-lg font-semibold text-gray-900">Novo Fornecedor</h3>
-            <p className="text-sm text-gray-500 mt-1">Cadastrar parceiro manual</p>
           </Link>
         </div>
 
-        {/* RODAPÉ PARA FORÇAR O COMMIT */}
-        <div className="mt-10 border-t pt-4 text-center text-gray-400 text-xs">
-          <p>Sowbrand System • Conexão Ativa</p>
+        {/* RODAPÉ: Isso fará o Commit aparecer */}
+        <div className="mt-12 pt-6 border-t border-gray-200 text-center">
+            <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-green-50 text-green-700 text-xs font-medium">
+                <CheckCircle2 size={12} />
+                Sistema Pronto • API Configurada
+            </div>
         </div>
 
       </div>
