@@ -3,7 +3,7 @@
 import React, { useState } from 'react';
 import { Supplier, Mesh, BatchProduct } from '@/types';
 import { extractBatchDataFromFiles } from '@/services/geminiService';
-import { Upload, X, Layers, CheckCircle, AlertCircle, Loader2 } from 'lucide-react';
+import { Upload, X, Layers, CheckCircle, AlertCircle, Loader2, RefreshCw, PlusCircle } from 'lucide-react';
 
 interface BatchImporterProps {
   supplier: Supplier;
@@ -50,12 +50,20 @@ export const BatchImporter: React.FC<BatchImporterProps> = ({ supplier, onImport
     
     try {
       const fileArray = Array.from(files);
+      // Chama o serviço REAL (sem mocks falsos)
       const data = await extractBatchDataFromFiles(fileArray);
-      setExtractedData(data);
-      const allProductCodes = new Set(data.map(p => p.product_code));
-      setSelectedProducts(allProductCodes);
+      
+      if (data.length === 0) {
+          setError("A IA não conseguiu identificar produtos. Verifique se as imagens estão nítidas ou se a Chave API está válida.");
+      } else {
+          setExtractedData(data);
+          // Seleciona todos por padrão
+          const allProductCodes = new Set(data.map(p => p.product_code));
+          setSelectedProducts(allProductCodes);
+      }
+      
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Ocorreu um erro desconhecido ao processar os arquivos.');
+      setError(err instanceof Error ? err.message : 'Erro ao processar arquivos.');
     } finally {
       setIsLoading(false);
     }
@@ -71,67 +79,59 @@ export const BatchImporter: React.FC<BatchImporterProps> = ({ supplier, onImport
     setSelectedProducts(newSelection);
   };
 
-  const toggleSelectAll = () => {
-    if (!extractedData) return;
-    
-    if (selectedProducts.size === extractedData.length) {
-      setSelectedProducts(new Set());
-    } else {
-      const allCodes = new Set(extractedData.map(p => p.product_code));
-      setSelectedProducts(allCodes);
-    }
-  };
-
   const handleImport = () => {
     if (!extractedData) return;
 
     const productsToImport = extractedData.filter(p => selectedProducts.has(p.product_code));
-    const newMeshes: Mesh[] = [];
+    const finalMeshes: Mesh[] = [];
 
     productsToImport.forEach(product => {
-      const existingMesh = existingMeshes.find(m => m.code === product.product_code);
+      // Verifica se já existe produto com esse código para este fornecedor
+      // Normalizamos para string para evitar erros de tipo
+      const existingMesh = existingMeshes.find(m => 
+          String(m.code) === String(product.product_code) && 
+          String(m.supplierId) === String(supplier.id)
+      );
 
+      // Converte lista de preços da IA para objeto do sistema
       const newPrices: Record<string, number> = {};
       product.price_list.forEach(p => {
           const key = String(p.category_normalized || p.original_category_name);
           newPrices[key] = p.price_cash_kg;
       });
 
-      // CORREÇÃO: Accesso seguro ao complemento
-      const newComplement = product.complement?.info || '';
-
       if (existingMesh) {
-        newMeshes.push({
+        // --- ATUALIZAR (UPDATE) ---
+        // Mantém ID original, atualiza dados técnicos e preços
+        finalMeshes.push({
           ...existingMesh,
-          name: product.product_name,
-          composition: product.composition,
-          // CORREÇÃO: Usar 'specs' e 'width_m'
-          width: product.specs.width_m ? product.specs.width_m * 100 : existingMesh.width,
+          name: product.product_name || existingMesh.name, // Prefere o nome novo se houver
+          composition: product.composition || existingMesh.composition,
+          width: product.specs.width_m ? product.specs.width_m * 100 : existingMesh.width, // m para cm
           grammage: product.specs.grammage_gsm || existingMesh.grammage,
-          yield: product.specs.yield_m_kg || existingMesh.yield,
-          prices: newPrices,
-          complement: newComplement || existingMesh.complement
+          prices: newPrices, // Sobrescreve preços antigos
+          // Atualiza data de modificação se você tiver esse campo, senão mantém
         });
       } else {
+        // --- CRIAR NOVO (CREATE) ---
         const newMesh: Mesh = {
-          id: Date.now().toString() + Math.random().toString(),
+          id: Date.now().toString() + Math.random().toString().slice(2, 6),
           supplierId: supplier.id,
           code: product.product_code,
           name: product.product_name,
           composition: product.composition,
-          // CORREÇÃO: Usar 'specs'
           width: product.specs.width_m ? product.specs.width_m * 100 : 0,
           grammage: product.specs.grammage_gsm || 0,
-          yield: product.specs.yield_m_kg || 0,
+          yield: 0, // A IA nem sempre pega rendimento em tabela de preço
           prices: newPrices,
-          complement: newComplement,
+          complement: product.complement?.info,
           imageUrl: ''
         };
-        newMeshes.push(newMesh);
+        finalMeshes.push(newMesh);
       }
     });
 
-    onImport(newMeshes);
+    onImport(finalMeshes);
   };
 
   return (
@@ -139,7 +139,7 @@ export const BatchImporter: React.FC<BatchImporterProps> = ({ supplier, onImport
       <div className="flex justify-between items-center mb-6">
         <h2 className="text-2xl font-bold flex items-center gap-2">
           <Layers className="text-orange-500" />
-          Importador em Lote: <span className="text-orange-500">{supplier.name}</span>
+          Importador em Lote: <span className="text-gray-700">{supplier.name}</span>
         </h2>
         <button onClick={onCancel} className="text-gray-500 hover:text-gray-700">
           <X size={24} />
@@ -158,21 +158,22 @@ export const BatchImporter: React.FC<BatchImporterProps> = ({ supplier, onImport
           {isLoading ? (
             <div className="flex flex-col items-center">
               <Loader2 className="h-12 w-12 text-orange-500 animate-spin mb-4" />
-              <p className="text-gray-600 font-medium">Analisando fichas técnicas com IA...</p>
-              <p className="text-sm text-gray-400 mt-2">Isso pode levar alguns segundos.</p>
+              <p className="text-gray-600 font-medium">Analisando arquivos com IA...</p>
+              <p className="text-sm text-gray-400 mt-2">Isso pode levar alguns segundos. Estamos lendo os dados reais.</p>
             </div>
           ) : (
             <>
               <div className="mb-4">
                 <Layers className={`h-16 w-16 mx-auto ${error ? 'text-red-400' : 'text-gray-400'}`} />
               </div>
-              <h3 className="text-lg font-medium text-gray-900 mb-2">Importar Múltiplas Fichas (IA)</h3>
+              <h3 className="text-lg font-medium text-gray-900 mb-2">Arraste seus arquivos aqui</h3>
               <p className="text-gray-500 mb-6 max-w-md mx-auto">
-                Envie várias imagens de fichas técnicas (e.g., Urbano Têxtil) de uma vez.
+                Suporta imagens (JPG, PNG) e PDF. Envie quantos arquivos quiser.
+                A IA lerá exatamente o que está nas tabelas.
               </p>
               
               {error && (
-                <div className="mb-6 p-3 bg-red-100 text-red-700 rounded-md flex items-center justify-center gap-2">
+                <div className="mb-6 p-3 bg-red-100 text-red-700 rounded-md flex items-center justify-center gap-2 text-sm">
                   <AlertCircle size={18} />
                   <span>{error}</span>
                 </div>
@@ -180,7 +181,7 @@ export const BatchImporter: React.FC<BatchImporterProps> = ({ supplier, onImport
 
               <label className="cursor-pointer bg-orange-500 hover:bg-orange-600 text-white px-6 py-3 rounded-md font-medium transition-colors inline-flex items-center gap-2">
                 <Upload size={20} />
-                Enviar Arquivos
+                Selecionar Arquivos
                 <input
                   type="file"
                   multiple
@@ -189,7 +190,6 @@ export const BatchImporter: React.FC<BatchImporterProps> = ({ supplier, onImport
                   onChange={handleFileSelect}
                 />
               </label>
-              <p className="text-xs text-gray-400 mt-4">Suporta: JPG, PNG, PDF</p>
             </>
           )}
         </div>
@@ -197,24 +197,20 @@ export const BatchImporter: React.FC<BatchImporterProps> = ({ supplier, onImport
         <div className="space-y-6">
           <div className="bg-gray-50 p-4 rounded-md border border-gray-200">
             <div className="flex justify-between items-center mb-4">
-              <h3 className="text-lg font-bold text-gray-800">Produtos Extraídos</h3>
-              <div className="flex items-center gap-2">
-                <input 
-                  type="checkbox" 
-                  id="selectAll"
-                  className="rounded text-orange-500 focus:ring-orange-500"
-                  checked={selectedProducts.size === extractedData.length && extractedData.length > 0}
-                  onChange={toggleSelectAll}
-                />
-                <label htmlFor="selectAll" className="text-sm font-medium text-gray-700 cursor-pointer">
-                  Selecionar Todos
-                </label>
+              <h3 className="text-lg font-bold text-gray-800">
+                  {extractedData.length} Produtos Encontrados
+              </h3>
+              <div className="text-sm text-gray-500">
+                  Selecione os que deseja importar
               </div>
             </div>
 
             <div className="space-y-3 max-h-[400px] overflow-y-auto pr-2">
               {extractedData.map((product, idx) => {
                 const isSelected = selectedProducts.has(product.product_code);
+                // Verifica se já existe para mostrar ícone diferente
+                const isUpdate = existingMeshes.some(m => String(m.code) === String(product.product_code));
+
                 return (
                   <div 
                     key={`${product.product_code}-${idx}`}
@@ -223,38 +219,46 @@ export const BatchImporter: React.FC<BatchImporterProps> = ({ supplier, onImport
                     onClick={() => toggleProductSelection(product.product_code)}
                   >
                     <div className="flex items-start gap-3">
-                      <div className={`mt-1 flex-shrink-0 text-orange-500 opacity-${isSelected ? '100' : '0'}`}>
-                        <CheckCircle size={20} fill={isSelected ? "currentColor" : "none"} className={isSelected ? "text-orange-500" : "text-gray-300"} />
+                      <div className={`mt-1 flex-shrink-0 ${isSelected ? 'text-orange-500' : 'text-gray-300'}`}>
+                        <CheckCircle size={20} fill={isSelected ? "currentColor" : "none"} />
                       </div>
                       <div className="flex-grow">
                         <div className="flex justify-between items-start">
                           <div>
-                            <h4 className="font-bold text-gray-900">{product.product_name}</h4>
-                            <p className="text-xs text-gray-500">Cód: {product.product_code}</p>
+                            <div className="flex items-center gap-2">
+                                <h4 className="font-bold text-gray-900">{product.product_name}</h4>
+                                {isUpdate ? (
+                                    <span className="text-xs bg-blue-100 text-blue-700 px-2 py-0.5 rounded-full flex items-center gap-1 font-bold">
+                                        <RefreshCw size={10} /> Atualização
+                                    </span>
+                                ) : (
+                                    <span className="text-xs bg-green-100 text-green-700 px-2 py-0.5 rounded-full flex items-center gap-1 font-bold">
+                                        <PlusCircle size={10} /> Novo
+                                    </span>
+                                )}
+                            </div>
+                            <p className="text-xs text-gray-500 font-mono">Cód: {product.product_code}</p>
                           </div>
-                          {product.complement?.info && (
-                            <span className="bg-yellow-100 text-yellow-800 text-xs px-2 py-1 rounded-full font-medium">
-                              {product.complement.info}
-                            </span>
-                          )}
                         </div>
                         
                         <div className="mt-2 text-sm text-gray-600 grid grid-cols-2 gap-2">
-                          <p>Comp: {product.composition}</p>
-                          <p>Larg: {product.specs.width_m}m | {product.specs.grammage_gsm}g/m²</p>
+                          <p><span className="font-semibold">Comp:</span> {product.composition}</p>
+                          <p><span className="font-semibold">Dados:</span> {product.specs.width_m}m | {product.specs.grammage_gsm}g/m²</p>
                         </div>
 
-                        <div className="mt-3 bg-gray-50 p-2 rounded text-xs">
-                          <p className="font-semibold mb-1 text-gray-700">Lista de Preços:</p>
-                          <div className="grid grid-cols-2 gap-x-4 gap-y-1">
-                            {product.price_list.map((price, pIdx) => (
-                              <div key={pIdx} className="flex justify-between">
-                                <span className="text-gray-500">{price.category_normalized || price.original_category_name}:</span>
-                                <span className="font-mono font-medium">R$ {price.price_cash_kg.toFixed(2)}</span>
-                              </div>
-                            ))}
-                          </div>
-                        </div>
+                        {product.price_list.length > 0 && (
+                            <div className="mt-3 bg-gray-50 p-2 rounded text-xs border border-gray-100">
+                            <p className="font-semibold mb-1 text-gray-700">Preços Detectados:</p>
+                            <div className="grid grid-cols-2 gap-x-4 gap-y-1">
+                                {product.price_list.map((price, pIdx) => (
+                                <div key={pIdx} className="flex justify-between">
+                                    <span className="text-gray-500 capitalize">{price.category_normalized || price.original_category_name}:</span>
+                                    <span className="font-mono font-medium text-gray-900">R$ {price.price_cash_kg.toFixed(2)}</span>
+                                </div>
+                                ))}
+                            </div>
+                            </div>
+                        )}
                       </div>
                     </div>
                   </div>
@@ -271,7 +275,7 @@ export const BatchImporter: React.FC<BatchImporterProps> = ({ supplier, onImport
               }}
               className="px-4 py-2 text-gray-600 hover:bg-gray-100 rounded-md transition-colors"
             >
-              Voltar
+              Cancelar
             </button>
             <button
               onClick={handleImport}
@@ -281,7 +285,9 @@ export const BatchImporter: React.FC<BatchImporterProps> = ({ supplier, onImport
                   ? 'bg-orange-600 hover:bg-orange-700 shadow-md' 
                   : 'bg-gray-300 cursor-not-allowed'}`}
             >
-              Importar {selectedProducts.size} produtos
+              {selectedProducts.size > 0 
+                ? `Confirmar (${selectedProducts.size})` 
+                : 'Selecione produtos'}
             </button>
           </div>
         </div>
