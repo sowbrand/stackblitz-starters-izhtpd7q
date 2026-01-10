@@ -2,9 +2,9 @@
 
 import React from 'react';
 import Link from 'next/link';
-// Caminho relativo para garantir que funcione
+// Importação com caminho relativo correto para o StackBlitz
 import { useSupplierContext } from './context/SupplierContext';
-import { Building2, ChevronRight, Package, Settings, Users } from 'lucide-react';
+import { ChevronRight, Package, Settings, Users } from 'lucide-react';
 
 export default function Home() {
   const { suppliers, meshes } = useSupplierContext();
@@ -86,6 +86,12 @@ export default function Home() {
             <p className="text-sm text-gray-500 mt-1">Cadastrar parceiro manual</p>
           </Link>
         </div>
+
+        {/* RODAPÉ PARA FORÇAR O COMMIT */}
+        <div className="mt-10 border-t pt-4 text-center text-gray-400 text-xs">
+          <p>Sowbrand System • Conexão Ativa</p>
+        </div>
+
       </div>
     </main>
   );
