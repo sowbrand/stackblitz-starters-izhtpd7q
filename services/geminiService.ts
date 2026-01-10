@@ -12,7 +12,7 @@ const getGenAI = () => {
   return new GoogleGenerativeAI(apiKey);
 };
 
-// Modelo padrão para todas as funções (Mais rápido e compatível)
+// Modelo padrão (Mais rápido e compatível)
 const MODEL_NAME = "gemini-1.5-flash";
 
 // --- FUNÇÃO AUXILIAR: ARQUIVO PARA BASE64 ---
@@ -40,14 +40,14 @@ function cleanJson(text: string): string {
 }
 
 // ============================================================================
-// 1. IDENTIFICAÇÃO ÚNICA (USADO NO CARD PRINCIPAL)
+// 1. IDENTIFICAÇÃO ÚNICA
 // ============================================================================
 export async function identifyFabricFromImage(imageFile: File) {
-  return extractDataFromFile(imageFile); // Reutiliza a função genérica abaixo
+  return extractDataFromFile(imageFile);
 }
 
 // ============================================================================
-// 2. EXTRAÇÃO GENÉRICA DE DADOS (USADO NO FORMULÁRIO DE MALHA)
+// 2. EXTRAÇÃO GENÉRICA DE DADOS
 // ============================================================================
 export async function extractDataFromFile(file: File) {
   try {
@@ -81,14 +81,13 @@ export async function extractDataFromFile(file: File) {
 }
 
 // ============================================================================
-// 3. IMPORTAÇÃO EM LOTE (BATCH IMPORTER)
+// 3. IMPORTAÇÃO EM LOTE (BATCH) - Recebe Array de Arquivos
 // ============================================================================
 export async function extractBatchDataFromFiles(files: File[]) {
   try {
     const genAI = getGenAI();
     const model = genAI.getGenerativeModel({ model: MODEL_NAME });
 
-    // Processar todas as imagens em paralelo
     const promises = files.map(async (file) => {
       const base64Data = await fileToGenerativePart(file);
       
@@ -108,16 +107,14 @@ export async function extractBatchDataFromFiles(files: File[]) {
       try {
         const result = await model.generateContent([prompt, base64Data]);
         const data = JSON.parse(cleanJson(result.response.text()));
-        // Adiciona um ID temporário e o nome do arquivo original
         return { ...data, id: Math.random().toString(36).substr(2, 9), originalFile: file.name };
       } catch (err) {
-        console.error(`Erro ao processar arquivo ${file.name}`, err);
-        return null; // Retorna null se falhar um arquivo específico
+        return null;
       }
     });
 
     const results = await Promise.all(promises);
-    return results.filter(item => item !== null); // Remove falhas
+    return results.filter(item => item !== null);
 
   } catch (error: any) {
     console.error("Erro no Batch:", error);
@@ -126,7 +123,7 @@ export async function extractBatchDataFromFiles(files: File[]) {
 }
 
 // ============================================================================
-// 4. LISTA DE PREÇOS (PRICE LIST IMPORTER)
+// 4. LISTA DE PREÇOS (PRICE LIST)
 // ============================================================================
 export async function extractPriceListData(file: File) {
   try {
@@ -153,7 +150,6 @@ export async function extractPriceListData(file: File) {
     const result = await model.generateContent([prompt, base64Data]);
     const text = cleanJson(result.response.text());
     
-    // Tenta garantir que é um array
     const json = JSON.parse(text);
     return Array.isArray(json) ? json : [json];
 
@@ -194,10 +190,9 @@ export async function extractPriceUpdateData(file: File) {
 }
 
 // ============================================================================
-// 6. LISTA CONSOLIDADA (CONSOLIDATED IMPORTER)
+// 6. LISTA CONSOLIDADA (CONSOLIDATED IMPORTER) - CORRIGIDO AQUI
 // ============================================================================
-export async function extractConsolidatedPriceListData(files: File[]) {
-  // Para simplificar, reutiliza a lógica de Batch, mas focado em tabelas
-  // Em um cenário real, poderia ter lógica específica para unir tabelas
-  return extractPriceListData(files[0]);
+// Correção: Agora aceita um único arquivo 'File', e não 'File[]'
+export async function extractConsolidatedPriceListData(file: File) {
+  return extractPriceListData(file);
 }
