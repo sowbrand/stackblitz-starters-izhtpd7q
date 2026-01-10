@@ -4,10 +4,11 @@ import React, { useState } from 'react';
 import { Upload, FileText, CheckCircle, AlertCircle, Loader2, ArrowRight } from 'lucide-react';
 import { extractPriceUpdateData } from '@/services/geminiService';
 
-export default function PriceUpdateImporter() {
+// MUDANÇA AQUI: Removido 'default'. Agora é 'export function'
+export function PriceUpdateImporter() {
   const [file, setFile] = useState<File | null>(null);
   const [loading, setLoading] = useState(false);
-  const [extractedData, setExtractedData] = useState<any>(null); // 'any' evita erro de build
+  const [extractedData, setExtractedData] = useState<any>(null);
   const [error, setError] = useState<string | null>(null);
 
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -25,11 +26,8 @@ export default function PriceUpdateImporter() {
     setError(null);
 
     try {
-      // Chama o serviço atualizado
       const data = await extractPriceUpdateData(file);
       
-      // O serviço retorna { effectiveDate, items: [...] } ou apenas os itens
-      // Normalizamos aqui para garantir que temos uma lista
       const items = data.items || (Array.isArray(data) ? data : []);
       const date = data.effectiveDate || new Date().toISOString().split('T')[0];
 
