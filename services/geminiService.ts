@@ -15,7 +15,6 @@ const fileToBase64 = async (file: File): Promise<string> => {
         reader.readAsDataURL(file);
         reader.onload = () => {
             const result = reader.result as string;
-            // Garante que pegamos apenas o base64 puro, sem o cabeçalho data:image...
             const base64Content = result.split(',')[1];
             resolve(base64Content);
         };
@@ -24,29 +23,22 @@ const fileToBase64 = async (file: File): Promise<string> => {
 };
 
 const cleanJsonString = (text: string): string => {
-    // Remove aspas de markdown e espaços extras
     let clean = text.replace(/```json/g, '').replace(/```/g, '').trim();
-    
-    // Tenta encontrar o início e fim do JSON real (seja objeto ou array)
     const firstBrace = clean.indexOf('{');
     const firstBracket = clean.indexOf('[');
     
-    // Se achar colchete antes de chave, é lista
     if (firstBracket !== -1 && (firstBrace === -1 || firstBracket < firstBrace)) {
         const lastBracket = clean.lastIndexOf(']');
         if (lastBracket !== -1) return clean.substring(firstBracket, lastBracket + 1);
     }
     
-    // Se achar chave, é objeto
     if (firstBrace !== -1) {
         const lastBrace = clean.lastIndexOf('}');
         if (lastBrace !== -1) return clean.substring(firstBrace, lastBrace + 1);
     }
-    
     return clean;
 };
 
-// Prompt calibrado para suas tabelas da Urbano (colunas R$/M2, Á Vista, etc)
 const PROMPT_SINGLE_FILE = `
 Atue como um especialista em extração de dados de fichas técnicas têxteis.
 Analise a imagem fornecida. Extraia os dados com precisão total.
@@ -83,40 +75,54 @@ Retorne APENAS um JSON válido com este formato (sem texto extra):
 }
 `;
 
+// --- FUNÇÃO PRINCIPAL ---
+
 export async function extractBatchDataFromFiles(files: File[]): Promise<BatchProduct[]> {
     const apiKey = getApiKey();
-    
-    // Verificação explícita da chave
     if (!apiKey || apiKey.length < 10) {
-        throw new Error("Chave API inválida ou não configurada. Verifique o arquivo .env.local e REINICIE o servidor.");
+        throw new Error("Chave API inválida. Verifique .env.local e reinicie.");
     }
 
     const ai = new GoogleGenerativeAI(apiKey);
-    const model = ai.getGenerativeModel({ model: "gemini-1.5-flash" });
+    
+    // CORREÇÃO: Usamos o sufixo -latest para evitar erro 404 em versões específicas
+    let model = ai.getGenerativeModel({ model: "gemini-1.5-flash-latest" });
 
     const results: BatchProduct[] = [];
     const errors: string[] = [];
 
-    // Processamento sequencial com atraso maior para evitar bloqueio
     for (let i = 0; i < files.length; i++) {
         const file = files[i];
         try {
-            console.log(`[${i+1}/${files.length}] Enviando ${file.name} para IA...`);
+            console.log(`[${i+1}/${files.length}] Enviando ${file.name}...`);
             const base64 = await fileToBase64(file);
             
-            const result = await model.generateContent([
-                PROMPT_SINGLE_FILE, 
-                { inlineData: { data: base64, mimeType: file.type } }
-            ]);
+            // Tentativa primária
+            let result;
+            try {
+                result = await model.generateContent([
+                    PROMPT_SINGLE_FILE, 
+                    { inlineData: { data: base64, mimeType: file.type } }
+                ]);
+            } catch (modelError: any) {
+                // Fallback: Se o modelo Flash der 404, tenta o Pro (mais lento mas funciona)
+                if (String(modelError).includes("404") || String(modelError).includes("not found")) {
+                    console.warn("Modelo Flash não encontrado, tentando Fallback para Pro...");
+                    const fallbackModel = ai.getGenerativeModel({ model: "gemini-1.5-pro-latest" });
+                    result = await fallbackModel.generateContent([
+                        PROMPT_SINGLE_FILE, 
+                        { inlineData: { data: base64, mimeType: file.type } }
+                    ]);
+                } else {
+                    throw modelError;
+                }
+            }
             
             const text = result.response.text();
             const parsed = JSON.parse(cleanJsonString(text));
-
-            // Normaliza resposta (aceita objeto único ou array de 1 item)
             let item: any = Array.isArray(parsed) ? parsed[0] : parsed;
 
             if (item && item.product_code) {
-                // Sanitização final dos dados
                 results.push({
                     supplier_name: item.supplier_name || "Fornecedor Detectado",
                     product_code: String(item.product_code).trim(),
@@ -134,26 +140,23 @@ export async function extractBatchDataFromFiles(files: File[]): Promise<BatchPro
 
         } catch (error: any) {
             let msg = error.message || "Erro desconhecido";
-            if (msg.includes("403") || msg.includes("API key not valid")) {
-                throw new Error("ERRO DE PERMISSÃO: Sua chave API foi rejeitada pelo Google. Verifique se copiou corretamente.");
-            }
-            if (msg.includes("429") || msg.includes("Quota")) {
-                console.warn(`Cota excedida no arquivo ${file.name}. Tentando continuar...`);
-                // Se der erro de cota, espera mais 5 segundos antes do próximo
-                await new Promise(r => setTimeout(r, 5000));
-            }
             console.error(`Falha em ${file.name}:`, error);
+            
+            if (msg.includes("429")) {
+                console.warn("Limite de taxa atingido. Aumentando pausa...");
+                await new Promise(r => setTimeout(r, 10000)); // Pausa de 10s se der rate limit
+            }
+            
             errors.push(`${file.name}: ${msg}`);
         }
         
-        // PAUSA DE SEGURANÇA: 3.5 segundos entre requisições (Essencial para conta Free)
+        // Pausa padrão de 4s para evitar Rate Limit (Flash tem limite de 15 Req/Min no free)
         if (i < files.length - 1) {
-            await new Promise(resolve => setTimeout(resolve, 3500));
+            await new Promise(resolve => setTimeout(resolve, 4000));
         }
     }
 
     if (results.length === 0) {
-        // Se falhou tudo, mostra o erro do primeiro arquivo para ajudar no debug
         const errorDetail = errors.length > 0 ? ` Detalhe: ${errors[0]}` : "";
         throw new Error(`Falha total. Nenhum dos ${files.length} arquivos foi processado.${errorDetail}`);
     }
@@ -161,7 +164,7 @@ export async function extractBatchDataFromFiles(files: File[]): Promise<BatchPro
     return results;
 }
 
-// --- MÉTODOS DE SUPORTE (Mantidos para compatibilidade) ---
+// --- MÉTODOS DE SUPORTE ---
 
 export async function extractDataFromFile(file: File): Promise<ExtractedData> {
     try {
@@ -192,7 +195,7 @@ export async function extractConsolidatedPriceListData(file: File): Promise<Cons
     if (!apiKey) return [];
     try {
         const ai = new GoogleGenerativeAI(apiKey);
-        const model = ai.getGenerativeModel({ model: "gemini-1.5-flash" });
+        const model = ai.getGenerativeModel({ model: "gemini-1.5-flash-latest" });
         const base64 = await fileToBase64(file);
         const prompt = `Analise tabela preços. JSON Array: { supplier, code, name, is_complement, specs: { width_m, grammage_gsm, yield_m_kg, composition }, price_list: [{ category, original_label, price_cash }] }`;
         const result = await model.generateContent([prompt, { inlineData: { data: base64, mimeType: file.type } }]);
