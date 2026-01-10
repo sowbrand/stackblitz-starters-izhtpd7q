@@ -1,31 +1,42 @@
+import type { Metadata } from 'next';
+import { Inter } from 'next/font/google';
+import './globals.css';
+// Importação segura assumindo app/context
+import { SupplierProvider } from './context/SupplierContext';
 
-import React from "react";
-import type { Metadata } from "next";
-import { Navbar } from "@/components/ui/Navbar";
-import "./globals.css";
+const inter = Inter({ subsets: ['latin'] });
 
 export const metadata: Metadata = {
-  title: "Sowbrand - Gestão Têxtil Inteligente",
-  description: "Um aplicativo inteligente para gestão, leitura, comparação e análise de malhas têxteis.",
+  title: 'Sowbrand',
+  description: 'Gestão de Malhas',
 };
 
 export default function RootLayout({
   children,
-}: Readonly<{
+}: {
   children: React.ReactNode;
-}>) {
+}) {
   return (
     <html lang="pt-BR">
-      <head>
-        <link rel="preconnect" href="https://fonts.googleapis.com" />
-        <link rel="preconnect" href="https://fonts.gstatic.com" crossOrigin="anonymous" />
-        <link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@400;500;600;700&display=swap" rel="stylesheet" />
-      </head>
-      <body className="bg-white min-h-screen text-[#545454]">
-        <Navbar />
-        <main className="p-4 sm:p-6 md:p-8">
-          {children}
-        </main>
+      <body className={inter.className}>
+        <SupplierProvider>
+            {/* Header Fixo */}
+            <header className="bg-white border-b sticky top-0 z-50 shadow-sm">
+              <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-16 flex items-center justify-between">
+                <div className="flex items-center gap-2">
+                  <div className="h-8 w-8 bg-blue-600 rounded-lg flex items-center justify-center text-white font-bold">S</div>
+                  <span className="text-xl font-bold text-gray-900">Sow<span className="text-gray-500">brand</span></span>
+                </div>
+                <nav className="flex space-x-6">
+                  <a href="/" className="text-gray-600 hover:text-blue-600 font-medium transition-colors">Fornecedores</a>
+                  <a href="/compare" className="text-gray-600 hover:text-blue-600 font-medium transition-colors">Comparador</a>
+                  <a href="/manage" className="text-gray-600 hover:text-blue-600 font-medium transition-colors">Gerenciar</a>
+                </nav>
+              </div>
+            </header>
+            
+            {children}
+        </SupplierProvider>
       </body>
     </html>
   );

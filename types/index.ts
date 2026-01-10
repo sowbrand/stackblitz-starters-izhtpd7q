@@ -8,6 +8,7 @@ export enum ColorCategory {
   Preto = "Preto"
 }
 
+// CORREÇÃO: Adicionado email e phone como opcionais (?) para evitar erros
 export interface Supplier {
   id: string;
   name: string;
@@ -24,23 +25,17 @@ export interface Mesh {
   width: number;
   grammage: number;
   yield: number;
-  // IMPORTANTE: prices é um objeto { "Branco": 50.00, "Claras": 52.00 }
   prices: Record<string, number>; 
   imageUrl?: string;
-  complement?: string; // Adicionado para corrigir os erros em MeshForm e SupplierDetail
+  complement?: string;
   description?: string;
   usageIndications?: string[];
   features?: string[];
-  shrinkage?: string;
-  torque?: string;
-  rollWeight?: number;
-  minOrder?: number;
   availableColors?: string[];
   colorPalettes?: Array<{ palette_name: string; codes: string[] }>;
 }
 
 // --- TIPOS DE RETORNO DA IA ---
-
 export interface ExtractedData {
   supplier: string;
   name: string;
@@ -109,10 +104,4 @@ export interface PriceUpdateData {
 export interface PriceDatabaseEntry {
   supplier_name: string;
   products: BatchProduct[];
-}
-
-// Mantido para compatibilidade se algum arquivo antigo importar
-export interface PriceInfo {
-  price: number;
-  date: Date;
 }
