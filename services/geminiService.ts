@@ -221,4 +221,5 @@ export async function extractPriceListData(file: File): Promise<PriceDatabaseEnt
     } catch {
         return { supplier_name: "Erro", products: [] };
     }
+
 }
