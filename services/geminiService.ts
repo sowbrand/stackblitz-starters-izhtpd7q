@@ -22,49 +22,65 @@ const fileToBase64 = async (file: File): Promise<string> => {
     });
 };
 
+// CORREÇÃO: Limpeza Robusta de JSON
+// A IA as vezes coloca texto antes ou depois. Isso pega só o objeto JSON.
 const cleanJsonString = (text: string): string => {
+    const firstBrace = text.indexOf('{');
+    const lastBrace = text.lastIndexOf('}');
+    
+    if (firstBrace !== -1 && lastBrace !== -1) {
+        return text.substring(firstBrace, lastBrace + 1);
+    }
+    
+    // Fallback: tenta limpar markdown
     return text.replace(/```json/g, '').replace(/```/g, '').trim();
 };
 
-// --- PROMPT INDIVIDUAL (Mais preciso) ---
+// --- PROMPT INDIVIDUAL (Fidelidade 100%) ---
+// Pedimos um OBJETO simples {}, não um Array []
 const PROMPT_SINGLE_FILE = `
-Analise esta imagem de ficha técnica têxtil. Extraia os dados EXATAMENTE como estão escritos.
-Não invente nada. Se não encontrar, deixe vazio ou 0.
+Analise esta ficha técnica. Extraia dados EXATAMENTE como escritos.
+Retorne APENAS um JSON válido.
 
-Extraia:
-1. "Artigo": Use APENAS os números (ex: "13030" ou "013030") para 'product_code'.
-2. Descrição/Nome (ex: MALHA MAGLIA EXTRA).
-3. Composição (ex: 100% ALGODÃO).
-4. Largura (m) e Gramatura (g/m²).
-5. TABELA DE PREÇOS ("Á Vista"):
-   - Mapeie "Classificação" para:
+Campos Obrigatórios:
+1. supplier_name: Sempre "Urbano Têxtil" (baseado no layout).
+2. product_code: O número em "Artigo". (Ex: "13030", "026105"). Mantenha zeros à esquerda se houver.
+3. product_name: O texto após o código do artigo (Ex: "MALHA MAGLIA EXTRA...").
+4. composition: O que estiver em "Composição" ou "Comp".
+5. specs: 
+   - width_m: Valor de "Larg" (Converta para número float, ex: 1,80 -> 1.80).
+   - grammage_gsm: Valor de "Gram" (Número inteiro).
+6. price_list:
+   - Extraia a tabela de preços.
+   - Use a coluna "Á Vista" como preço base (price_cash_kg).
+   - Mapeie "Classificação" para "category_normalized":
      - "BRANCO" -> "Branco"
      - "CLARA" -> "Claras"
      - "MÉDIA" -> "Mescla"
      - "ESCURA" -> "EscurasFortes"
      - "EXTRA" / "ESPECIAL" -> "Especiais"
      - "PRETO" -> "Preto"
-   - Pegue o valor da coluna "Á Vista".
+   - "original_category_name": O nome exato que está na tabela (Ex: "BRANCO", "MÉDIA").
 
-Retorne APENAS um objeto JSON válido (sem array em volta):
+Exemplo de formato de retorno (SEM ARRAY EM VOLTA):
 {
-  "supplier_name": "Urbano Têxtil", 
-  "product_code": "string",
-  "product_name": "string",
-  "composition": "string",
-  "specs": { "width_m": number, "grammage_gsm": number },
+  "supplier_name": "Urbano Têxtil",
+  "product_code": "13030",
+  "product_name": "MALHA MAGLIA EXTRA",
+  "composition": "100% ALGODÃO",
+  "specs": { "width_m": 1.20, "grammage_gsm": 225 },
   "price_list": [
-    { "category_normalized": "string", "original_category_name": "string", "price_cash_kg": number }
+    { "category_normalized": "Branco", "original_category_name": "BRANCO", "price_cash_kg": 53.07 }
   ]
 }
 `;
 
-// --- FUNÇÃO DE PROCESSAMENTO EM LOTE (UM POR UM) ---
+// --- FUNÇÃO DE PROCESSAMENTO ---
 
 export async function extractBatchDataFromFiles(files: File[]): Promise<BatchProduct[]> {
     const apiKey = getApiKey();
     if (!apiKey) {
-        throw new Error("Chave API não configurada. Verifique o .env.local e REINICIE o servidor.");
+        throw new Error("Chave API não configurada. Verifique .env.local");
     }
 
     const ai = new GoogleGenerativeAI(apiKey);
@@ -72,8 +88,7 @@ export async function extractBatchDataFromFiles(files: File[]): Promise<BatchPro
 
     const results: BatchProduct[] = [];
 
-    // Processa cada arquivo individualmente para garantir precisão máxima
-    // Usamos Promise.all para ser rápido, mas tratamos erros individualmente
+    // Processa um por um para garantir que não misture dados
     await Promise.all(files.map(async (file) => {
         try {
             const base64 = await fileToBase64(file);
@@ -84,32 +99,32 @@ export async function extractBatchDataFromFiles(files: File[]): Promise<BatchPro
             ]);
             
             const text = result.response.text();
-            console.log(`Leitura de ${file.name}:`, text); // Debug no Console
+            // console.log(`Raw AI Response for ${file.name}:`, text); // Descomente para debug
 
-            try {
-                const parsed = JSON.parse(cleanJsonString(text));
-                // Validação básica para garantir que não veio lixo
-                if (parsed.product_code || parsed.product_name) {
-                    results.push(parsed);
-                }
-            } catch (jsonError) {
-                console.warn(`Erro ao ler JSON de ${file.name}:`, text);
+            const cleanedJson = cleanJsonString(text);
+            const parsed = JSON.parse(cleanedJson);
+
+            // Validação para garantir que é um objeto válido e não lixo
+            if (parsed.product_code && Array.isArray(parsed.price_list)) {
+                results.push(parsed);
+            } else {
+                console.warn(`Arquivo ${file.name} ignorado: JSON incompleto`, parsed);
             }
 
         } catch (error) {
-            console.error(`Falha ao processar arquivo ${file.name}:`, error);
-            // Não quebra o loop, apenas ignora o arquivo com erro
+            console.error(`Erro ao ler arquivo ${file.name}:`, error);
+            // Não paramos o loop, apenas este arquivo falha
         }
     }));
 
     if (results.length === 0) {
-        throw new Error("Nenhum produto foi identificado nas imagens. Verifique se a chave API está correta ou se as imagens estão nítidas.");
+        throw new Error("Nenhum produto identificado. Verifique se a chave API é válida e se as imagens são fichas técnicas legíveis.");
     }
 
     return results;
 }
 
-// --- OUTRAS FUNÇÕES DE APOIO ---
+// --- OUTRAS FUNÇÕES (Mantidas para compatibilidade) ---
 
 export async function extractDataFromFile(file: File): Promise<ExtractedData> {
     const batch = await extractBatchDataFromFiles([file]);
@@ -130,45 +145,43 @@ export async function extractDataFromFile(file: File): Promise<ExtractedData> {
             complement: p.complement ? { code: '', name: p.complement.info } : undefined
         };
     }
-    throw new Error("Erro na leitura individual.");
+    throw new Error("Erro na leitura.");
 }
 
 export async function extractConsolidatedPriceListData(file: File): Promise<ConsolidatedProduct[]> {
-    // Para listas longas, mantemos o prompt de lista, mas usamos a nova lógica de chave
-    const apiKey = getApiKey();
-    if (!apiKey) throw new Error("Chave API ausente.");
-
-    try {
-        const ai = new GoogleGenerativeAI(apiKey);
-        const model = ai.getGenerativeModel({ model: "gemini-1.5-flash" });
-        const base64 = await fileToBase64(file);
-        
-        const prompt = `Analise a tabela de preços. Extraia TODOS os itens. JSON Array: { supplier, code, name, is_complement, specs: { width_m, grammage_gsm, yield_m_kg, composition }, price_list: [{ category, original_label, price_cash }] }`;
-        
-        const result = await model.generateContent([prompt, { inlineData: { data: base64, mimeType: file.type } }]);
-        const parsed = JSON.parse(cleanJsonString(result.response.text()));
-        
-        return Array.isArray(parsed) ? parsed : [];
-    } catch (e) {
-        console.error(e);
-        return [];
-    }
+    // Reutiliza a lógica robusta de batch
+    const batchData = await extractBatchDataFromFiles([file]);
+    return batchData.map(b => ({
+        supplier: b.supplier_name,
+        code: b.product_code,
+        name: b.product_name,
+        is_complement: false,
+        specs: { width_m: b.specs.width_m, grammage_gsm: b.specs.grammage_gsm, yield_m_kg: 0, composition: b.composition },
+        price_list: b.price_list.map(pl => ({ 
+            category: pl.category_normalized, 
+            original_label: pl.original_category_name, 
+            price_cash: pl.price_cash_kg 
+        }))
+    }));
 }
 
 export async function extractPriceUpdateData(file: File): Promise<PriceUpdateData[]> {
-    const data = await extractConsolidatedPriceListData(file);
-    return data.map(d => ({
-        supplier_name: d.supplier,
-        product_code: d.code,
-        product_name: d.name,
-        price_list: d.price_list.map(p => ({ category_normalized: p.category, price_cash_kg: p.price_cash }))
+    const batchData = await extractBatchDataFromFiles([file]);
+    return batchData.map(b => ({
+        supplier_name: b.supplier_name,
+        product_code: b.product_code,
+        product_name: b.product_name,
+        price_list: b.price_list.map(pl => ({
+            category_normalized: pl.category_normalized,
+            price_cash_kg: pl.price_cash_kg
+        }))
     }));
 }
 
 export async function extractPriceListData(file: File): Promise<PriceDatabaseEntry> {
-    const data = await extractBatchDataFromFiles([file]);
+    const batchData = await extractBatchDataFromFiles([file]);
     return {
-        supplier_name: data[0]?.supplier_name || "Desconhecido",
-        products: data
+        supplier_name: batchData[0]?.supplier_name || "Desconhecido",
+        products: batchData
     };
 }
