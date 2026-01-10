@@ -1,4 +1,8 @@
-import { GoogleGenerativeAI } from "@google/generative-ai";
+import { 
+    GoogleGenerativeAI, 
+    HarmCategory, 
+    HarmBlockThreshold 
+} from "@google/generative-ai";
 import { 
     ExtractedData, 
     BatchProduct, 
@@ -9,13 +13,18 @@ import {
 
 const getApiKey = () => process.env.API_KEY || process.env.NEXT_PUBLIC_GEMINI_API_KEY;
 
-// Lista de modelos para tentar (do mais rápido para o mais robusto)
-// Se um der 404, o código tenta o próximo automaticamente.
+// Lista de modelos atualizada para as versões mais estáveis
 const MODEL_NAMES = [
     "gemini-1.5-flash",
-    "gemini-1.5-flash-001",
     "gemini-1.5-pro",
-    "gemini-1.5-pro-001"
+];
+
+// Configuração para IGNORAR bloqueios de segurança (essencial para ler dados técnicos sem falsos positivos)
+const SAFETY_SETTINGS = [
+    { category: HarmCategory.HARM_CATEGORY_HARASSMENT, threshold: HarmBlockThreshold.BLOCK_NONE },
+    { category: HarmCategory.HARM_CATEGORY_HATE_SPEECH, threshold: HarmBlockThreshold.BLOCK_NONE },
+    { category: HarmCategory.HARM_CATEGORY_SEXUALLY_EXPLICIT, threshold: HarmBlockThreshold.BLOCK_NONE },
+    { category: HarmCategory.HARM_CATEGORY_DANGEROUS_CONTENT, threshold: HarmBlockThreshold.BLOCK_NONE },
 ];
 
 const fileToBase64 = async (file: File): Promise<string> => {
@@ -40,7 +49,6 @@ const cleanJsonString = (text: string): string => {
         const lastBracket = clean.lastIndexOf(']');
         if (lastBracket !== -1) return clean.substring(firstBracket, lastBracket + 1);
     }
-    
     if (firstBrace !== -1) {
         const lastBrace = clean.lastIndexOf('}');
         if (lastBrace !== -1) return clean.substring(firstBrace, lastBrace + 1);
@@ -49,29 +57,17 @@ const cleanJsonString = (text: string): string => {
 };
 
 const PROMPT_SINGLE_FILE = `
-Atue como um especialista em extração de dados de fichas técnicas têxteis.
-Analise a imagem fornecida. Extraia os dados com precisão total.
+Analise esta imagem técnica. Extraia os dados EXATAMENTE como estão escritos.
+Identifique:
+1. Código ("Artigo"): apenas números.
+2. Nome/Descrição.
+3. Composição.
+4. Largura (m) e Gramatura (g/m²).
+5. Tabela de Preços (Coluna "Á Vista"):
+   - Mapeie a "Classificação" (BRANCO, CLARA, MÉDIA, etc) para a chave normalizada.
+   - Use os valores da coluna Á Vista.
 
-1. **Cabeçalho:**
-   - Encontre "Artigo:" -> O número ao lado é o 'product_code' (Ex: 13030, 50001). Mantenha zeros.
-   - Texto ao lado do código -> 'product_name' (Ex: MALHA MAGLIA EXTRA...).
-   - "Larg:" -> 'width_m' (formato numérico, ex: 1.20).
-   - "Gram:" -> 'grammage_gsm' (formato numérico, ex: 225).
-   - "Composição:" -> 'composition'.
-
-2. **Tabela de Preços (ATENÇÃO):**
-   - A tabela tem colunas como: Classificação | R$/M2 | Á Vista | 14 Dias...
-   - Você DEVE extrair o valor da coluna **"Á Vista"** (ou "A Vista").
-   - Ignore R$/M2. Ignore prazos (14 dias, 28 dias).
-   - Mapeie a "Classificação" para 'category_normalized':
-     - "BRANCO" -> "Branco"
-     - "CLARA" -> "Claras"
-     - "MÉDIA" -> "Mescla"
-     - "ESCURA" -> "EscurasFortes"
-     - "EXTRA" / "ESPECIAL" -> "Especiais"
-     - "PRETO" -> "Preto"
-
-Retorne APENAS um JSON válido com este formato (sem texto extra):
+Retorne JSON puro:
 {
   "supplier_name": "Urbano Têxtil",
   "product_code": "string",
@@ -84,34 +80,36 @@ Retorne APENAS um JSON válido com este formato (sem texto extra):
 }
 `;
 
-// --- FUNÇÃO PRINCIPAL ---
-
 export async function extractBatchDataFromFiles(files: File[]): Promise<BatchProduct[]> {
     const apiKey = getApiKey();
     if (!apiKey || apiKey.length < 10) {
-        throw new Error("Chave API inválida. Verifique .env.local e reinicie.");
+        throw new Error("Chave API ausente ou inválida no .env.local.");
     }
 
     const ai = new GoogleGenerativeAI(apiKey);
     const results: BatchProduct[] = [];
-    const errors: string[] = [];
+    const globalErrors: string[] = [];
 
     // Loop pelos arquivos
     for (let i = 0; i < files.length; i++) {
         const file = files[i];
+        let fileError = "";
         let success = false;
 
         // Loop pelos modelos (Tentativa em Cascata)
         for (const modelName of MODEL_NAMES) {
-            if (success) break; // Se já funcionou com um modelo, para de tentar outros
+            if (success) break;
 
             try {
-                // Só loga a tentativa do primeiro modelo para não poluir, ou se for retentativa
                 if (modelName === MODEL_NAMES[0]) {
-                    console.log(`[${i+1}/${files.length}] Enviando ${file.name} (Tentando ${modelName})...`);
+                    console.log(`Processando ${file.name} com ${modelName}...`);
                 }
 
-                const model = ai.getGenerativeModel({ model: modelName });
+                const model = ai.getGenerativeModel({ 
+                    model: modelName,
+                    safetySettings: SAFETY_SETTINGS // Aplica a configuração sem filtros
+                });
+                
                 const base64 = await fileToBase64(file);
                 
                 const result = await model.generateContent([
@@ -120,67 +118,64 @@ export async function extractBatchDataFromFiles(files: File[]): Promise<BatchPro
                 ]);
                 
                 const text = result.response.text();
+                // console.log("Resposta IA:", text); // Descomente para ver o retorno bruto no console
+
                 const parsed = JSON.parse(cleanJsonString(text));
-                
-                // Normaliza resposta
                 let item: any = Array.isArray(parsed) ? parsed[0] : parsed;
 
-                if (item && item.product_code) {
+                if (item && (item.product_code || item.product_name)) {
                     results.push({
                         supplier_name: item.supplier_name || "Fornecedor Detectado",
-                        product_code: String(item.product_code).trim(),
-                        product_name: String(item.product_name).trim(),
-                        composition: String(item.composition).trim(),
+                        product_code: String(item.product_code || "").trim(),
+                        product_name: String(item.product_name || "").trim(),
+                        composition: String(item.composition || "").trim(),
                         specs: {
                             width_m: Number(item.specs?.width_m || 0),
                             grammage_gsm: Number(item.specs?.grammage_gsm || 0)
                         },
                         price_list: Array.isArray(item.price_list) ? item.price_list : []
                     });
-                    success = true; // Marcar como sucesso para sair do loop de modelos
+                    success = true;
                 } 
 
             } catch (error: any) {
-                const msg = String(error);
-                // Se for erro 404 (Modelo não encontrado), tenta o próximo silenciosamente
-                if (msg.includes("404") || msg.includes("not found")) {
-                    console.warn(`Modelo ${modelName} falhou (404). Tentando próximo...`);
+                const msg = error.message || String(error);
+                
+                // Se for 404, tenta o próximo modelo silenciosamente
+                if (msg.includes("404") || msg.includes("not found")) continue;
+
+                // Se for 429 (Cota), espera e tenta outro modelo
+                if (msg.includes("429")) {
+                    console.warn("Cota excedida (429). Aguardando 5s...");
+                    await new Promise(r => setTimeout(r, 5000));
                     continue; 
                 }
-                
-                // Se for erro de Cota (429), espera e tenta o mesmo modelo de novo? 
-                // Não, melhor abortar esse arquivo e esperar para o próximo.
-                if (msg.includes("429")) {
-                    console.warn("Limite de taxa (429). Aguardando 10s...");
-                    await new Promise(r => setTimeout(r, 10000));
-                    errors.push(`${file.name}: Limite de API excedido.`);
-                    break; // Sai do loop de modelos, vai para o proximo arquivo
-                }
 
-                // Outros erros
-                console.error(`Erro com ${modelName}:`, error);
+                // Captura o erro real para mostrar ao usuário
+                fileError = `Erro (${modelName}): ${msg}`;
+                console.error(fileError);
             }
         }
 
         if (!success) {
-            errors.push(`${file.name}: Falha em todos os modelos.`);
+            // Se chegou aqui, falhou em todos os modelos
+            globalErrors.push(`${file.name}: ${fileError || "Falha desconhecida na extração"}`);
         }
         
-        // Pausa de segurança entre arquivos (4s)
-        if (i < files.length - 1) {
-            await new Promise(resolve => setTimeout(resolve, 4000));
-        }
+        // Pausa entre arquivos
+        if (i < files.length - 1) await new Promise(r => setTimeout(r, 2000));
     }
 
     if (results.length === 0) {
-        const errorDetail = errors.length > 0 ? ` Detalhe: ${errors[0]}` : "";
-        throw new Error(`Falha total. Nenhum arquivo processado.${errorDetail}`);
+        // Mostra o erro exato do primeiro arquivo que falhou
+        const errorDetail = globalErrors.length > 0 ? globalErrors[0] : "Erro desconhecido";
+        throw new Error(`FALHA CRÍTICA: ${errorDetail}`);
     }
 
     return results;
 }
 
-// --- MÉTODOS DE SUPORTE ---
+// --- SUPORTE ---
 
 export async function extractDataFromFile(file: File): Promise<ExtractedData> {
     try {
@@ -203,32 +198,34 @@ export async function extractDataFromFile(file: File): Promise<ExtractedData> {
             };
         }
     } catch (e) { console.error(e); }
-    throw new Error("Não foi possível ler o arquivo.");
+    throw new Error("Erro na leitura.");
 }
 
 export async function extractConsolidatedPriceListData(file: File): Promise<ConsolidatedProduct[]> {
-    const apiKey = getApiKey();
-    if (!apiKey) return [];
+    // Reutiliza a lógica de batch
     try {
-        const ai = new GoogleGenerativeAI(apiKey);
-        // Usa o flash padrão aqui
-        const model = ai.getGenerativeModel({ model: "gemini-1.5-flash" });
-        const base64 = await fileToBase64(file);
-        const prompt = `Analise tabela preços. JSON Array: { supplier, code, name, is_complement, specs: { width_m, grammage_gsm, yield_m_kg, composition }, price_list: [{ category, original_label, price_cash }] }`;
-        const result = await model.generateContent([prompt, { inlineData: { data: base64, mimeType: file.type } }]);
-        const parsed = JSON.parse(cleanJsonString(result.response.text()));
-        return Array.isArray(parsed) ? parsed : [];
-    } catch (e) { return []; }
+        const batch = await extractBatchDataFromFiles([file]);
+        return batch.map(b => ({
+            supplier: b.supplier_name,
+            code: b.product_code,
+            name: b.product_name,
+            is_complement: false,
+            specs: { width_m: b.specs.width_m, grammage_gsm: b.specs.grammage_gsm, yield_m_kg: 0, composition: b.composition },
+            price_list: b.price_list.map(pl => ({ category: pl.category_normalized, original_label: pl.original_category_name, price_cash: pl.price_cash_kg }))
+        }));
+    } catch { return []; }
 }
 
 export async function extractPriceUpdateData(file: File): Promise<PriceUpdateData[]> {
-    const data = await extractConsolidatedPriceListData(file);
-    return data.map(d => ({
-        supplier_name: d.supplier,
-        product_code: d.code,
-        product_name: d.name,
-        price_list: d.price_list.map(p => ({ category_normalized: p.category, price_cash_kg: p.price_cash }))
-    }));
+    try {
+        const batch = await extractBatchDataFromFiles([file]);
+        return batch.map(b => ({
+            supplier_name: b.supplier_name,
+            product_code: b.product_code,
+            product_name: b.product_name,
+            price_list: b.price_list.map(pl => ({ category_normalized: pl.category_normalized, price_cash_kg: pl.price_cash_kg }))
+        }));
+    } catch { return []; }
 }
 
 export async function extractPriceListData(file: File): Promise<PriceDatabaseEntry> {
