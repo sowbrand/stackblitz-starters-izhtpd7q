@@ -13,13 +13,17 @@ import {
 
 const getApiKey = () => process.env.API_KEY || process.env.NEXT_PUBLIC_GEMINI_API_KEY;
 
-// Lista de modelos atualizada para as versões mais estáveis
+// Lista ampliada de modelos para garantir que um deles funcione na sua região/conta
 const MODEL_NAMES = [
     "gemini-1.5-flash",
+    "gemini-1.5-flash-latest",
+    "gemini-1.5-flash-001",
     "gemini-1.5-pro",
+    "gemini-1.5-pro-latest",
+    "gemini-1.5-pro-001"
 ];
 
-// Configuração para IGNORAR bloqueios de segurança (essencial para ler dados técnicos sem falsos positivos)
+// Configuração de segurança permissiva
 const SAFETY_SETTINGS = [
     { category: HarmCategory.HARM_CATEGORY_HARASSMENT, threshold: HarmBlockThreshold.BLOCK_NONE },
     { category: HarmCategory.HARM_CATEGORY_HATE_SPEECH, threshold: HarmBlockThreshold.BLOCK_NONE },
@@ -33,6 +37,7 @@ const fileToBase64 = async (file: File): Promise<string> => {
         reader.readAsDataURL(file);
         reader.onload = () => {
             const result = reader.result as string;
+            // Pega apenas o base64 sem o cabeçalho
             const base64Content = result.split(',')[1];
             resolve(base64Content);
         };
@@ -43,31 +48,25 @@ const fileToBase64 = async (file: File): Promise<string> => {
 const cleanJsonString = (text: string): string => {
     let clean = text.replace(/```json/g, '').replace(/```/g, '').trim();
     const firstBrace = clean.indexOf('{');
-    const firstBracket = clean.indexOf('[');
-    
-    if (firstBracket !== -1 && (firstBrace === -1 || firstBracket < firstBrace)) {
-        const lastBracket = clean.lastIndexOf(']');
-        if (lastBracket !== -1) return clean.substring(firstBracket, lastBracket + 1);
-    }
-    if (firstBrace !== -1) {
-        const lastBrace = clean.lastIndexOf('}');
-        if (lastBrace !== -1) return clean.substring(firstBrace, lastBrace + 1);
+    const lastBrace = clean.lastIndexOf('}');
+    if (firstBrace !== -1 && lastBrace !== -1) {
+        return clean.substring(firstBrace, lastBrace + 1);
     }
     return clean;
 };
 
 const PROMPT_SINGLE_FILE = `
-Analise esta imagem técnica. Extraia os dados EXATAMENTE como estão escritos.
+Analise esta imagem técnica (tabela de preços). Extraia os dados EXATAMENTE como estão escritos.
 Identifique:
 1. Código ("Artigo"): apenas números.
 2. Nome/Descrição.
 3. Composição.
 4. Largura (m) e Gramatura (g/m²).
 5. Tabela de Preços (Coluna "Á Vista"):
-   - Mapeie a "Classificação" (BRANCO, CLARA, MÉDIA, etc) para a chave normalizada.
-   - Use os valores da coluna Á Vista.
+   - Mapeie a "Classificação" para chaves normalizadas: "Branco", "Claras", "Mescla", "EscurasFortes", "Especiais", "Preto".
+   - Use os valores numéricos da coluna Á Vista.
 
-Retorne JSON puro:
+Retorne APENAS JSON puro:
 {
   "supplier_name": "Urbano Têxtil",
   "product_code": "string",
@@ -83,31 +82,28 @@ Retorne JSON puro:
 export async function extractBatchDataFromFiles(files: File[]): Promise<BatchProduct[]> {
     const apiKey = getApiKey();
     if (!apiKey || apiKey.length < 10) {
-        throw new Error("Chave API ausente ou inválida no .env.local.");
+        throw new Error("Chave API inválida. Verifique .env.local");
     }
 
     const ai = new GoogleGenerativeAI(apiKey);
     const results: BatchProduct[] = [];
     const globalErrors: string[] = [];
 
-    // Loop pelos arquivos
     for (let i = 0; i < files.length; i++) {
         const file = files[i];
-        let fileError = "";
+        let lastErrorMsg = "";
         let success = false;
 
-        // Loop pelos modelos (Tentativa em Cascata)
+        // Loop pelos modelos
         for (const modelName of MODEL_NAMES) {
             if (success) break;
 
             try {
-                if (modelName === MODEL_NAMES[0]) {
-                    console.log(`Processando ${file.name} com ${modelName}...`);
-                }
+                if (i === 0) console.log(`Tentando ${file.name} com modelo: ${modelName}...`);
 
                 const model = ai.getGenerativeModel({ 
                     model: modelName,
-                    safetySettings: SAFETY_SETTINGS // Aplica a configuração sem filtros
+                    safetySettings: SAFETY_SETTINGS
                 });
                 
                 const base64 = await fileToBase64(file);
@@ -118,9 +114,8 @@ export async function extractBatchDataFromFiles(files: File[]): Promise<BatchPro
                 ]);
                 
                 const text = result.response.text();
-                // console.log("Resposta IA:", text); // Descomente para ver o retorno bruto no console
-
                 const parsed = JSON.parse(cleanJsonString(text));
+                
                 let item: any = Array.isArray(parsed) ? parsed[0] : parsed;
 
                 if (item && (item.product_code || item.product_name)) {
@@ -136,30 +131,25 @@ export async function extractBatchDataFromFiles(files: File[]): Promise<BatchPro
                         price_list: Array.isArray(item.price_list) ? item.price_list : []
                     });
                     success = true;
+                    console.log(`Sucesso com ${modelName}!`);
                 } 
 
             } catch (error: any) {
                 const msg = error.message || String(error);
+                lastErrorMsg = msg; // Guarda o erro para exibir se todos falharem
                 
-                // Se for 404, tenta o próximo modelo silenciosamente
-                if (msg.includes("404") || msg.includes("not found")) continue;
-
-                // Se for 429 (Cota), espera e tenta outro modelo
+                // Se for 429 (Cota), espera um pouco
                 if (msg.includes("429")) {
-                    console.warn("Cota excedida (429). Aguardando 5s...");
+                    console.warn(`Cota excedida no modelo ${modelName}. Pausando...`);
                     await new Promise(r => setTimeout(r, 5000));
-                    continue; 
                 }
-
-                // Captura o erro real para mostrar ao usuário
-                fileError = `Erro (${modelName}): ${msg}`;
-                console.error(fileError);
             }
         }
 
         if (!success) {
-            // Se chegou aqui, falhou em todos os modelos
-            globalErrors.push(`${file.name}: ${fileError || "Falha desconhecida na extração"}`);
+            // Se chegou aqui, falhou em TODOS os modelos da lista
+            console.error(`Falha final em ${file.name}: ${lastErrorMsg}`);
+            globalErrors.push(`${file.name}: ${lastErrorMsg}`);
         }
         
         // Pausa entre arquivos
@@ -167,15 +157,24 @@ export async function extractBatchDataFromFiles(files: File[]): Promise<BatchPro
     }
 
     if (results.length === 0) {
-        // Mostra o erro exato do primeiro arquivo que falhou
-        const errorDetail = globalErrors.length > 0 ? globalErrors[0] : "Erro desconhecido";
-        throw new Error(`FALHA CRÍTICA: ${errorDetail}`);
+        // Formata o erro para ser legível
+        let errorMsg = globalErrors[0] || "Erro desconhecido";
+        
+        if (errorMsg.includes("404") || errorMsg.includes("not found")) {
+            errorMsg = "API Error: Modelos IA não encontrados para sua chave. Verifique se a 'Generative Language API' está ativada no Google Cloud Console.";
+        } else if (errorMsg.includes("403") || errorMsg.includes("key")) {
+            errorMsg = "API Error: Chave inválida ou sem permissão.";
+        } else if (errorMsg.includes("400")) {
+            errorMsg = "API Error: Imagem inválida ou formato não suportado.";
+        }
+
+        throw new Error(`FALHA: ${errorMsg}`);
     }
 
     return results;
 }
 
-// --- SUPORTE ---
+// --- MÉTODOS DE SUPORTE ---
 
 export async function extractDataFromFile(file: File): Promise<ExtractedData> {
     try {
@@ -202,7 +201,6 @@ export async function extractDataFromFile(file: File): Promise<ExtractedData> {
 }
 
 export async function extractConsolidatedPriceListData(file: File): Promise<ConsolidatedProduct[]> {
-    // Reutiliza a lógica de batch
     try {
         const batch = await extractBatchDataFromFiles([file]);
         return batch.map(b => ({
