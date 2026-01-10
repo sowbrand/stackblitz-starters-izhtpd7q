@@ -1,15 +1,24 @@
 'use client';
 
 import React, { useState } from 'react';
-import { Upload, FileText, CheckCircle, AlertCircle, Loader2, ArrowRight } from 'lucide-react';
+import { Upload, FileText, CheckCircle, AlertCircle, Loader2, ArrowRight, X } from 'lucide-react';
 import { extractPriceUpdateData } from '@/services/geminiService';
+import { Supplier, Mesh } from '@/types';
 
-// MUDANÇA AQUI: Removido 'default'. Agora é 'export function'
-export function PriceUpdateImporter() {
+// DEFINIÇÃO DAS PROPS (Isso corrige o erro do Vercel)
+interface PriceUpdateImporterProps {
+  supplier: Supplier;
+  allMeshes: Mesh[];
+  setMeshes: React.Dispatch<React.SetStateAction<Mesh[]>>;
+  onClose: () => void;
+}
+
+export function PriceUpdateImporter({ supplier, allMeshes, setMeshes, onClose }: PriceUpdateImporterProps) {
   const [file, setFile] = useState<File | null>(null);
   const [loading, setLoading] = useState(false);
   const [extractedData, setExtractedData] = useState<any>(null);
   const [error, setError] = useState<string | null>(null);
+  const [successMsg, setSuccessMsg] = useState<string | null>(null);
 
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     if (e.target.files && e.target.files[0]) {
@@ -21,7 +30,6 @@ export function PriceUpdateImporter() {
 
   const handleProcess = async () => {
     if (!file) return;
-
     setLoading(true);
     setError(null);
 
@@ -44,36 +52,85 @@ export function PriceUpdateImporter() {
     }
   };
 
+  // Função para efetivar a atualização dos preços
+  const handleApplyUpdates = () => {
+    if (!extractedData || !extractedData.items) return;
+
+    const updates = extractedData.items;
+    let updateCount = 0;
+
+    // Cria um mapa para busca rápida: Código -> Novo Preço
+    const priceMap = new Map<string, number>();
+    updates.forEach((u: any) => {
+      const code = u.code || u.product_code;
+      const price = Number(u.newPrice || u.price);
+      if (code && !isNaN(price)) {
+        priceMap.set(String(code).toUpperCase().trim(), price);
+      }
+    });
+
+    // Atualiza a lista principal de malhas
+    const newMeshes = allMeshes.map(mesh => {
+      // Só atualiza se for deste fornecedor E tiver o código na lista
+      if (String(mesh.supplierId) === String(supplier.id)) {
+        const newPrice = priceMap.get(String(mesh.code).toUpperCase().trim());
+        if (newPrice !== undefined) {
+          updateCount++;
+          return { ...mesh, price: newPrice };
+        }
+      }
+      return mesh;
+    });
+
+    setMeshes(newMeshes);
+    setSuccessMsg(`${updateCount} produtos atualizados com sucesso!`);
+    
+    // Fecha o modal após 1.5s
+    setTimeout(() => {
+      onClose();
+    }, 1500);
+  };
+
   return (
-    <div className="bg-white p-6 rounded-xl shadow-sm border border-gray-200">
+    <div className="bg-white p-6 relative">
+      {/* Botão de Fechar */}
+      <button 
+        onClick={onClose}
+        className="absolute top-4 right-4 text-gray-400 hover:text-gray-600"
+      >
+        <X size={20} />
+      </button>
+
       <h2 className="text-xl font-bold text-gray-900 mb-4 flex items-center gap-2">
         <FileText className="text-blue-600" />
-        Importar Reajuste de Preços
+        Importar Reajuste - {supplier.name}
       </h2>
 
       <div className="space-y-6">
         {/* Área de Upload */}
-        <div className="border-2 border-dashed border-gray-300 rounded-lg p-8 text-center hover:bg-gray-50 transition-colors">
-          <input
-            type="file"
-            id="update-upload"
-            className="hidden"
-            accept="image/*,.pdf"
-            onChange={handleFileChange}
-          />
-          <label htmlFor="update-upload" className="cursor-pointer flex flex-col items-center">
-            <Upload className="h-10 w-10 text-gray-400 mb-3" />
-            <span className="text-sm font-medium text-gray-700">
-              {file ? file.name : 'Clique para selecionar a imagem do comunicado'}
-            </span>
-            <span className="text-xs text-gray-500 mt-1">
-              Suporta JPG, PNG (Tabelas ou Cartas)
-            </span>
-          </label>
-        </div>
+        {!extractedData && !successMsg && (
+          <div className="border-2 border-dashed border-gray-300 rounded-lg p-8 text-center hover:bg-gray-50 transition-colors">
+            <input
+              type="file"
+              id="update-upload"
+              className="hidden"
+              accept="image/*,.pdf"
+              onChange={handleFileChange}
+            />
+            <label htmlFor="update-upload" className="cursor-pointer flex flex-col items-center">
+              <Upload className="h-10 w-10 text-gray-400 mb-3" />
+              <span className="text-sm font-medium text-gray-700">
+                {file ? file.name : 'Clique para selecionar a imagem do comunicado'}
+              </span>
+              <span className="text-xs text-gray-500 mt-1">
+                Suporta JPG, PNG (Tabelas ou Cartas)
+              </span>
+            </label>
+          </div>
+        )}
 
-        {/* Botão de Ação */}
-        {file && !extractedData && (
+        {/* Botão de Processar */}
+        {file && !extractedData && !successMsg && (
           <button
             onClick={handleProcess}
             disabled={loading}
@@ -90,28 +147,35 @@ export function PriceUpdateImporter() {
           </button>
         )}
 
-        {/* Exibição de Erro */}
+        {/* Mensagens */}
         {error && (
           <div className="p-3 bg-red-50 text-red-700 rounded-lg text-sm flex items-center gap-2">
             <AlertCircle size={16} />
             {error}
           </div>
         )}
+        
+        {successMsg && (
+          <div className="p-4 bg-green-50 text-green-700 rounded-lg text-center font-medium flex flex-col items-center gap-2">
+            <CheckCircle size={32} />
+            {successMsg}
+          </div>
+        )}
 
-        {/* Resultado da Extração */}
-        {extractedData && (
-          <div className="mt-6 border-t pt-6">
+        {/* Resultado e Confirmação */}
+        {extractedData && !successMsg && (
+          <div className="mt-2 border-t pt-4">
             <div className="flex items-center justify-between mb-4">
               <div className="flex items-center gap-2 text-green-700 bg-green-50 px-3 py-1 rounded-full text-sm font-medium">
                 <CheckCircle size={16} />
-                Dados Extraídos
+                Dados Identificados
               </div>
               <span className="text-sm text-gray-500">
                 Vigência: <strong>{extractedData.effectiveDate}</strong>
               </span>
             </div>
 
-            <div className="bg-gray-50 rounded-lg p-4 max-h-60 overflow-y-auto">
+            <div className="bg-gray-50 rounded-lg p-4 max-h-60 overflow-y-auto mb-4">
               <table className="w-full text-sm text-left">
                 <thead className="text-xs text-gray-500 uppercase border-b">
                   <tr>
@@ -134,7 +198,7 @@ export function PriceUpdateImporter() {
                   ) : (
                     <tr>
                       <td colSpan={2} className="py-4 text-center text-gray-500">
-                        Nenhum item identificado automaticamente.
+                        Nenhum item identificado.
                       </td>
                     </tr>
                   )}
@@ -142,9 +206,18 @@ export function PriceUpdateImporter() {
               </table>
             </div>
 
-            <div className="mt-4 flex justify-end">
-              <button className="flex items-center gap-2 text-blue-600 font-medium hover:text-blue-800 text-sm">
-                Aplicar Atualizações <ArrowRight size={16} />
+            <div className="flex gap-3">
+              <button 
+                onClick={onClose}
+                className="flex-1 py-2 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 font-medium"
+              >
+                Cancelar
+              </button>
+              <button 
+                onClick={handleApplyUpdates}
+                className="flex-1 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 font-medium flex items-center justify-center gap-2"
+              >
+                Confirmar Atualização <ArrowRight size={16} />
               </button>
             </div>
           </div>
