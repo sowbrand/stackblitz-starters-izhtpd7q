@@ -9,6 +9,15 @@ import {
 
 const getApiKey = () => process.env.API_KEY || process.env.NEXT_PUBLIC_GEMINI_API_KEY;
 
+// Lista de modelos para tentar (do mais rápido para o mais robusto)
+// Se um der 404, o código tenta o próximo automaticamente.
+const MODEL_NAMES = [
+    "gemini-1.5-flash",
+    "gemini-1.5-flash-001",
+    "gemini-1.5-pro",
+    "gemini-1.5-pro-001"
+];
+
 const fileToBase64 = async (file: File): Promise<string> => {
     return new Promise((resolve, reject) => {
         const reader = new FileReader();
@@ -84,73 +93,80 @@ export async function extractBatchDataFromFiles(files: File[]): Promise<BatchPro
     }
 
     const ai = new GoogleGenerativeAI(apiKey);
-    
-    // CORREÇÃO: Usamos o sufixo -latest para evitar erro 404 em versões específicas
-    let model = ai.getGenerativeModel({ model: "gemini-1.5-flash-latest" });
-
     const results: BatchProduct[] = [];
     const errors: string[] = [];
 
+    // Loop pelos arquivos
     for (let i = 0; i < files.length; i++) {
         const file = files[i];
-        try {
-            console.log(`[${i+1}/${files.length}] Enviando ${file.name}...`);
-            const base64 = await fileToBase64(file);
-            
-            // Tentativa primária
-            let result;
+        let success = false;
+
+        // Loop pelos modelos (Tentativa em Cascata)
+        for (const modelName of MODEL_NAMES) {
+            if (success) break; // Se já funcionou com um modelo, para de tentar outros
+
             try {
-                result = await model.generateContent([
+                // Só loga a tentativa do primeiro modelo para não poluir, ou se for retentativa
+                if (modelName === MODEL_NAMES[0]) {
+                    console.log(`[${i+1}/${files.length}] Enviando ${file.name} (Tentando ${modelName})...`);
+                }
+
+                const model = ai.getGenerativeModel({ model: modelName });
+                const base64 = await fileToBase64(file);
+                
+                const result = await model.generateContent([
                     PROMPT_SINGLE_FILE, 
                     { inlineData: { data: base64, mimeType: file.type } }
                 ]);
-            } catch (modelError: any) {
-                // Fallback: Se o modelo Flash der 404, tenta o Pro (mais lento mas funciona)
-                if (String(modelError).includes("404") || String(modelError).includes("not found")) {
-                    console.warn("Modelo Flash não encontrado, tentando Fallback para Pro...");
-                    const fallbackModel = ai.getGenerativeModel({ model: "gemini-1.5-pro-latest" });
-                    result = await fallbackModel.generateContent([
-                        PROMPT_SINGLE_FILE, 
-                        { inlineData: { data: base64, mimeType: file.type } }
-                    ]);
-                } else {
-                    throw modelError;
+                
+                const text = result.response.text();
+                const parsed = JSON.parse(cleanJsonString(text));
+                
+                // Normaliza resposta
+                let item: any = Array.isArray(parsed) ? parsed[0] : parsed;
+
+                if (item && item.product_code) {
+                    results.push({
+                        supplier_name: item.supplier_name || "Fornecedor Detectado",
+                        product_code: String(item.product_code).trim(),
+                        product_name: String(item.product_name).trim(),
+                        composition: String(item.composition).trim(),
+                        specs: {
+                            width_m: Number(item.specs?.width_m || 0),
+                            grammage_gsm: Number(item.specs?.grammage_gsm || 0)
+                        },
+                        price_list: Array.isArray(item.price_list) ? item.price_list : []
+                    });
+                    success = true; // Marcar como sucesso para sair do loop de modelos
+                } 
+
+            } catch (error: any) {
+                const msg = String(error);
+                // Se for erro 404 (Modelo não encontrado), tenta o próximo silenciosamente
+                if (msg.includes("404") || msg.includes("not found")) {
+                    console.warn(`Modelo ${modelName} falhou (404). Tentando próximo...`);
+                    continue; 
                 }
-            }
-            
-            const text = result.response.text();
-            const parsed = JSON.parse(cleanJsonString(text));
-            let item: any = Array.isArray(parsed) ? parsed[0] : parsed;
+                
+                // Se for erro de Cota (429), espera e tenta o mesmo modelo de novo? 
+                // Não, melhor abortar esse arquivo e esperar para o próximo.
+                if (msg.includes("429")) {
+                    console.warn("Limite de taxa (429). Aguardando 10s...");
+                    await new Promise(r => setTimeout(r, 10000));
+                    errors.push(`${file.name}: Limite de API excedido.`);
+                    break; // Sai do loop de modelos, vai para o proximo arquivo
+                }
 
-            if (item && item.product_code) {
-                results.push({
-                    supplier_name: item.supplier_name || "Fornecedor Detectado",
-                    product_code: String(item.product_code).trim(),
-                    product_name: String(item.product_name).trim(),
-                    composition: String(item.composition).trim(),
-                    specs: {
-                        width_m: Number(item.specs?.width_m || 0),
-                        grammage_gsm: Number(item.specs?.grammage_gsm || 0)
-                    },
-                    price_list: Array.isArray(item.price_list) ? item.price_list : []
-                });
-            } else {
-                errors.push(`${file.name}: JSON incompleto`);
+                // Outros erros
+                console.error(`Erro com ${modelName}:`, error);
             }
+        }
 
-        } catch (error: any) {
-            let msg = error.message || "Erro desconhecido";
-            console.error(`Falha em ${file.name}:`, error);
-            
-            if (msg.includes("429")) {
-                console.warn("Limite de taxa atingido. Aumentando pausa...");
-                await new Promise(r => setTimeout(r, 10000)); // Pausa de 10s se der rate limit
-            }
-            
-            errors.push(`${file.name}: ${msg}`);
+        if (!success) {
+            errors.push(`${file.name}: Falha em todos os modelos.`);
         }
         
-        // Pausa padrão de 4s para evitar Rate Limit (Flash tem limite de 15 Req/Min no free)
+        // Pausa de segurança entre arquivos (4s)
         if (i < files.length - 1) {
             await new Promise(resolve => setTimeout(resolve, 4000));
         }
@@ -158,7 +174,7 @@ export async function extractBatchDataFromFiles(files: File[]): Promise<BatchPro
 
     if (results.length === 0) {
         const errorDetail = errors.length > 0 ? ` Detalhe: ${errors[0]}` : "";
-        throw new Error(`Falha total. Nenhum dos ${files.length} arquivos foi processado.${errorDetail}`);
+        throw new Error(`Falha total. Nenhum arquivo processado.${errorDetail}`);
     }
 
     return results;
@@ -195,7 +211,8 @@ export async function extractConsolidatedPriceListData(file: File): Promise<Cons
     if (!apiKey) return [];
     try {
         const ai = new GoogleGenerativeAI(apiKey);
-        const model = ai.getGenerativeModel({ model: "gemini-1.5-flash-latest" });
+        // Usa o flash padrão aqui
+        const model = ai.getGenerativeModel({ model: "gemini-1.5-flash" });
         const base64 = await fileToBase64(file);
         const prompt = `Analise tabela preços. JSON Array: { supplier, code, name, is_complement, specs: { width_m, grammage_gsm, yield_m_kg, composition }, price_list: [{ category, original_label, price_cash }] }`;
         const result = await model.generateContent([prompt, { inlineData: { data: base64, mimeType: file.type } }]);
@@ -221,5 +238,4 @@ export async function extractPriceListData(file: File): Promise<PriceDatabaseEnt
     } catch {
         return { supplier_name: "Erro", products: [] };
     }
-
 }
