@@ -1,88 +1,92 @@
 'use client';
 
-import React, { useState } from 'react';
-// Caminhos ajustados para voltar uma pasta (../) até a raiz
-import { MESH_TYPES } from '../lib/constants';
-import { FabricCard } from '../components/FabricCard';
-import { Search, Filter, SlidersHorizontal } from 'lucide-react';
+import React from 'react';
 import Link from 'next/link';
-// Caminho ajustado para a pasta context que está dentro de app
+// Caminho relativo para garantir que funcione
 import { useSupplierContext } from './context/SupplierContext';
+import { Building2, ChevronRight, Package, Settings, Users } from 'lucide-react';
 
 export default function Home() {
-  const { meshes, suppliers } = useSupplierContext();
-  
-  const [searchTerm, setSearchTerm] = useState('');
-  const [selectedType, setSelectedType] = useState('');
+  const { suppliers, meshes } = useSupplierContext();
 
-  const filteredMeshes = meshes.filter(mesh => {
-    const matchesSearch = mesh.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-                          mesh.code.toLowerCase().includes(searchTerm.toLowerCase());
-    const matchesType = selectedType ? mesh.name.toLowerCase().includes(selectedType.toLowerCase()) : true;
-    
-    return matchesSearch && matchesType;
-  });
-
-  const getSupplierName = (id: string) => {
-    return suppliers.find(s => String(s.id) === String(id))?.name || 'Fornecedor Desconhecido';
+  // Função auxiliar para mostrar quantos produtos cada fornecedor tem
+  const getMeshCount = (supplierId: string) => {
+    return meshes.filter(m => String(m.supplierId) === String(supplierId)).length;
   };
 
   return (
-    <main className="min-h-screen bg-gray-50 p-6 flex flex-col">
-      <div className="max-w-7xl mx-auto flex-grow w-full">
-        <h1 className="text-2xl font-bold text-gray-900 mb-6">Catálogo de Malhas</h1>
-        
-        {/* Filtros */}
-        <div className="bg-white p-4 rounded-lg shadow-sm border border-gray-200 mb-8 flex flex-col md:flex-row gap-4">
-            <div className="relative flex-grow">
-              <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400" size={20} />
-              <input 
-                type="text" 
-                placeholder="Buscar por nome, código..." 
-                className="w-full pl-10 pr-4 py-2 border rounded-lg outline-none focus:ring-2 focus:ring-blue-500"
-                value={searchTerm}
-                onChange={(e) => setSearchTerm(e.target.value)}
-              />
-            </div>
-            <div className="relative min-w-[200px]">
-              <Filter className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400" size={20} />
-              <select 
-                className="w-full pl-10 pr-8 py-2 border rounded-lg appearance-none bg-white outline-none focus:ring-2 focus:ring-blue-500"
-                value={selectedType}
-                onChange={(e) => setSelectedType(e.target.value)}
-              >
-                <option value="">Todos os Tipos</option>
-                {MESH_TYPES.map(type => <option key={type} value={type}>{type}</option>)}
-              </select>
-              <SlidersHorizontal className="absolute right-3 top-1/2 transform -translate-y-1/2 text-gray-400 pointer-events-none" size={16} />
-            </div>
+    <main className="min-h-screen bg-gray-50 p-6">
+      <div className="max-w-6xl mx-auto">
+        {/* Cabeçalho da Aba 1 */}
+        <div className="flex flex-col md:flex-row justify-between items-center mb-8 gap-4">
+          <div>
+            <h1 className="text-3xl font-bold text-gray-900 flex items-center gap-2">
+              <Users className="text-blue-600" />
+              Fornecedores
+            </h1>
+            <p className="text-gray-500 mt-2">Selecione um fornecedor para ver produtos e importar tabelas.</p>
+          </div>
+          
+          {/* Botão de Atalho para a Aba 3 (Gerenciar) */}
+          <Link 
+            href="/manage" 
+            className="flex items-center gap-2 text-gray-700 bg-white border border-gray-300 px-4 py-2 rounded-lg hover:bg-gray-50 hover:text-blue-600 font-medium transition-colors shadow-sm"
+          >
+            <Settings size={18} />
+            Gerenciar Lista
+          </Link>
         </div>
 
-        {/* Grid */}
-        <div className="mb-4 text-sm text-gray-500">Mostrando {filteredMeshes.length} resultados</div>
+        {/* Grid de Fornecedores */}
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+          {suppliers.map((supplier) => (
+            <Link 
+              key={supplier.id} 
+              href={`/suppliers/${supplier.id}`}
+              className="group block h-full"
+            >
+              <div className="bg-white rounded-xl p-6 shadow-sm border border-gray-200 hover:border-blue-500 hover:shadow-md transition-all h-full flex flex-col justify-between cursor-pointer relative overflow-hidden">
+                {/* Detalhe visual de hover */}
+                <div className="absolute top-0 left-0 w-1 h-full bg-blue-500 transform -translate-x-1 transition-transform group-hover:translate-x-0"></div>
 
-        {filteredMeshes.length > 0 ? (
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
-            {filteredMeshes.map((mesh) => (
-              <div key={mesh.id} className="group relative">
-                <Link href={`/suppliers/${mesh.supplierId}`} className="block h-full">
-                  <FabricCard fabric={mesh} />
-                </Link>
-                <div className="absolute top-2 right-2 bg-white/90 backdrop-blur-sm px-2 py-1 rounded text-xs font-semibold text-gray-600 shadow-sm border">
-                  {getSupplierName(mesh.supplierId)}
+                <div>
+                  <div className="flex justify-between items-start mb-4">
+                    <div className="h-12 w-12 bg-blue-50 text-blue-600 rounded-lg flex items-center justify-center font-bold text-xl group-hover:bg-blue-600 group-hover:text-white transition-colors">
+                      {supplier.name.substring(0, 2).toUpperCase()}
+                    </div>
+                    <ChevronRight className="text-gray-300 group-hover:text-blue-500 transition-colors" />
+                  </div>
+                  
+                  <h3 className="text-xl font-bold text-gray-900 mb-1 group-hover:text-blue-700 transition-colors">
+                    {supplier.name}
+                  </h3>
+                  <div className="text-sm text-gray-500 mb-4">
+                    {supplier.email || '• Clique para acessar a área de uploads'}
+                  </div>
+                </div>
+
+                <div className="pt-4 border-t border-gray-50 flex items-center gap-2 text-sm text-gray-600">
+                  <Package size={16} className="text-gray-400" />
+                  <span className="font-bold text-gray-900">{getMeshCount(supplier.id)}</span> 
+                  <span className="text-gray-500">produtos cadastrados</span>
                 </div>
               </div>
-            ))}
-          </div>
-        ) : (
-          <div className="text-center py-20 text-gray-500">Nenhuma malha encontrada.</div>
-        )}
+            </Link>
+          ))}
+
+          {/* Card Atalho para Adicionar Novo */}
+          <Link 
+            href="/manage"
+            className="group block border-2 border-dashed border-gray-300 rounded-xl p-6 flex flex-col items-center justify-center text-center hover:border-blue-400 hover:bg-blue-50 transition-all min-h-[200px]"
+          >
+            <div className="h-12 w-12 bg-gray-100 text-gray-500 rounded-full flex items-center justify-center mb-3 group-hover:scale-110 group-hover:bg-blue-100 group-hover:text-blue-600 transition-all">
+              <Settings size={24} />
+            </div>
+            <h3 className="text-lg font-semibold text-gray-900">Novo Fornecedor</h3>
+            <p className="text-sm text-gray-500 mt-1">Cadastrar parceiro manual</p>
+          </Link>
+        </div>
       </div>
-      
-      {/* Rodapé para forçar atualização */}
-      <footer className="mt-12 text-center text-xs text-gray-400 border-t pt-4">
-        <p>Sowbrand System © 2026</p>
-      </footer>
     </main>
   );
 }
