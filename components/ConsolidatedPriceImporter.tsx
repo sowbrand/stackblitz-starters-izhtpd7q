@@ -1,37 +1,33 @@
 'use client';
 
 import React, { useState } from 'react';
-import { Upload, FileText, CheckCircle, AlertCircle, Loader2, ArrowRight, X, Key } from 'lucide-react';
-import { extractConsolidatedPriceListData } from '@/services/geminiService';
+import { Upload, FileText, CheckCircle, AlertCircle, Loader2, X, Key, ArrowRight } from 'lucide-react';
+import { extractPriceUpdateData } from '@/services/geminiService';
 
 interface Props {
-  supplier: any;
-  allMeshes: any[];
-  setMeshes: (meshes: any[]) => void;
   onClose: () => void;
+  onImport: (data: any) => void;
 }
 
-export function ConsolidatedPriceImporter({ supplier, allMeshes, setMeshes, onClose }: Props) {
+export function PriceUpdateImporter({ onClose, onImport }: Props) {
   const [file, setFile] = useState<File | null>(null);
   const [loading, setLoading] = useState(false);
-  const [extractedData, setExtractedData] = useState<any[] | null>(null);
+  const [extractedData, setExtractedData] = useState<any | null>(null);
   const [error, setError] = useState<string | null>(null);
-  const [selectedProducts, setSelectedProducts] = useState<Set<any>>(new Set());
-  
-  // NOVO: Estado para a chave manual
   const [manualKey, setManualKey] = useState('');
 
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     if (e.target.files && e.target.files[0]) {
       setFile(e.target.files[0]);
       setError(null);
+      setExtractedData(null);
     }
   };
 
   const handleProcess = async () => {
     if (!file) return;
     if (!manualKey) {
-      setError("Por favor, cole sua Chave de API do Google no campo acima.");
+      setError("Por favor, informe a Chave de API no campo amarelo.");
       return;
     }
 
@@ -39,14 +35,22 @@ export function ConsolidatedPriceImporter({ supplier, allMeshes, setMeshes, onCl
     setError(null);
 
     try {
-      // Passamos a chave manual direto para o serviço
-      const data = await extractConsolidatedPriceListData(file, manualKey);
+      // Passa a chave manual
+      const data = await extractPriceUpdateData(file, manualKey);
+
+      // Verificação de segurança (corrige o erro 'data is possibly null')
+      if (!data) {
+        throw new Error("A IA não retornou dados válidos.");
+      }
       
-      const safeData = Array.isArray(data) ? data : (data as any).products || [];
-      setExtractedData(safeData);
-      const allCodes = new Set(safeData.map((p: any) => String(p.code || '')));
-      setSelectedProducts(allCodes);
-      
+      const items = data.items || (Array.isArray(data) ? data : []);
+      const date = data.effectiveDate || new Date().toISOString().split('T')[0];
+
+      setExtractedData({
+        effectiveDate: date,
+        items: items
+      });
+
     } catch (err: any) {
       console.error(err);
       setError(err.message || 'Erro ao processar arquivo.');
@@ -55,37 +59,11 @@ export function ConsolidatedPriceImporter({ supplier, allMeshes, setMeshes, onCl
     }
   };
 
-  const toggleAll = () => {
-    if (!extractedData) return;
-    if (selectedProducts.size === extractedData.length) {
-      setSelectedProducts(new Set());
-    } else {
-      const allCodes = new Set(extractedData.map((p: any) => String(p.code || '')));
-      setSelectedProducts(allCodes);
+  const handleConfirm = () => {
+    if (extractedData) {
+      onImport(extractedData);
+      onClose();
     }
-  };
-
-  const toggleProduct = (code: string) => {
-    const newSelected = new Set(selectedProducts);
-    if (newSelected.has(code)) newSelected.delete(code);
-    else newSelected.add(code);
-    setSelectedProducts(newSelected);
-  };
-
-  const handleImportSelected = () => {
-    if (!extractedData) return;
-    const newMeshes = extractedData
-      .filter((item: any) => selectedProducts.has(String(item.code || '')))
-      .map((item: any) => ({
-        id: Math.random().toString(36).substr(2, 9),
-        name: item.name,
-        code: item.code || 'S/C',
-        price: Number(item.price || 0),
-        supplierId: supplier?.id,
-        width: 0, grammage: 0, yield: 0, composition: '', type: 'Malha', imageUrl: '', color: ''
-      }));
-    setMeshes([...allMeshes, ...newMeshes]);
-    onClose();
   };
 
   return (
@@ -93,38 +71,39 @@ export function ConsolidatedPriceImporter({ supplier, allMeshes, setMeshes, onCl
       <div className="flex justify-between items-center mb-6">
         <h2 className="text-xl font-bold text-gray-900 flex items-center gap-2">
           <FileText className="text-blue-600" />
-          Importar Tabela
+          Importar Reajuste de Preços
         </h2>
-        <button onClick={onClose} className="text-gray-500 hover:text-gray-700"><X size={24} /></button>
+        <button onClick={onClose} className="text-gray-500 hover:text-gray-700">
+          <X size={24} />
+        </button>
       </div>
 
       <div className="space-y-4 flex-1 overflow-y-auto">
         
-        {/* CAMPO DE CHAVE MANUAL - SOLUÇÃO DEFINITIVA */}
+        {/* CAMPO DE CHAVE MANUAL */}
         {!extractedData && (
-          <div className="bg-yellow-50 p-4 rounded-lg border border-yellow-200">
-            <label className="block text-sm font-bold text-yellow-800 mb-2 flex items-center gap-2">
-              <Key size={16} /> Cole sua Chave API do Google (AI Studio) aqui:
+          <div className="bg-yellow-50 p-3 rounded-lg border border-yellow-200">
+            <label className="block text-xs font-bold text-yellow-800 mb-1 flex items-center gap-1">
+              <Key size={14} /> Chave API Google:
             </label>
             <input 
               type="text" 
               value={manualKey}
               onChange={(e) => setManualKey(e.target.value)}
-              placeholder="AIzaSy..."
-              className="w-full p-2 border border-yellow-300 rounded bg-white text-gray-800 text-sm focus:ring-2 focus:ring-yellow-500 outline-none"
+              placeholder="Cole sua chave AIzaSy... aqui"
+              className="w-full p-2 border border-yellow-300 rounded bg-white text-xs text-gray-800 outline-none"
             />
-            <p className="text-xs text-yellow-700 mt-1">
-              Isso garante que a chave funcione sem depender de configurações do servidor.
-            </p>
           </div>
         )}
 
         {!extractedData && (
           <div className="border-2 border-dashed border-gray-300 rounded-lg p-8 text-center hover:bg-gray-50">
-            <input type="file" id="up" className="hidden" accept="image/*,.pdf" onChange={handleFileChange} />
-            <label htmlFor="up" className="cursor-pointer flex flex-col items-center">
+            <input type="file" id="price-update-upload" className="hidden" accept="image/*,.pdf" onChange={handleFileChange} />
+            <label htmlFor="price-update-upload" className="cursor-pointer flex flex-col items-center">
               <Upload className="h-10 w-10 text-gray-400 mb-3" />
-              <span className="text-sm font-medium text-gray-700">{file ? file.name : 'Selecionar Imagem'}</span>
+              <span className="text-sm font-medium text-gray-700">
+                {file ? file.name : 'Selecionar Imagem do Comunicado'}
+              </span>
             </label>
           </div>
         )}
@@ -135,7 +114,7 @@ export function ConsolidatedPriceImporter({ supplier, allMeshes, setMeshes, onCl
             disabled={loading}
             className="w-full py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50 flex items-center justify-center gap-2"
           >
-            {loading ? <><Loader2 className="animate-spin" size={18} /> Processando...</> : 'Processar Agora'}
+            {loading ? <><Loader2 className="animate-spin" size={18} /> Processando...</> : 'Processar Reajuste'}
           </button>
         )}
 
@@ -147,29 +126,37 @@ export function ConsolidatedPriceImporter({ supplier, allMeshes, setMeshes, onCl
 
         {extractedData && (
           <div className="border-t pt-4">
-             <div className="flex items-center justify-between mb-4 bg-gray-50 p-3 rounded-lg">
-              <div className="flex items-center gap-2 text-green-700 font-medium">
-                <CheckCircle size={16} /> {extractedData.length} Itens
-              </div>
-              <button onClick={toggleAll} className="text-sm text-blue-600 hover:underline">Selecionar Todos</button>
+            <div className="mb-4 bg-green-50 p-3 rounded-lg text-green-800 text-sm">
+              <p><strong>Data Efetiva:</strong> {extractedData.effectiveDate}</p>
+              <p><strong>Itens Identificados:</strong> {extractedData.items.length}</p>
             </div>
-            <div className="bg-white border rounded-lg max-h-80 overflow-y-auto">
+
+            <div className="bg-white border rounded-lg max-h-64 overflow-y-auto mb-4">
               <table className="w-full text-sm text-left">
+                <thead className="bg-gray-50 text-xs uppercase text-gray-500">
+                  <tr>
+                    <th className="p-2">Código</th>
+                    <th className="p-2 text-right">Novo Preço</th>
+                  </tr>
+                </thead>
                 <tbody>
-                  {extractedData.map((item: any, i: number) => (
-                    <tr key={i} className="hover:bg-gray-50 border-b">
-                      <td className="p-3"><input type="checkbox" checked={selectedProducts.has(String(item.code||''))} onChange={() => toggleProduct(String(item.code||''))}/></td>
-                      <td className="p-3 font-medium">{item.code}</td>
-                      <td className="p-3">{item.name}</td>
-                      <td className="p-3 text-right font-bold text-green-600">R$ {item.price}</td>
+                  {extractedData.items.map((item: any, i: number) => (
+                    <tr key={i} className="border-b hover:bg-gray-50">
+                      <td className="p-2 font-medium">{item.code}</td>
+                      <td className="p-2 text-right font-bold text-green-600">
+                        R$ {Number(item.newPrice || 0).toFixed(2)}
+                      </td>
                     </tr>
                   ))}
                 </tbody>
               </table>
             </div>
-            <div className="mt-4 flex justify-end gap-2">
-              <button onClick={onClose} className="px-4 py-2 bg-gray-100 rounded text-gray-700">Cancelar</button>
-              <button onClick={handleImportSelected} className="px-4 py-2 bg-blue-600 text-white rounded">Importar</button>
+
+            <div className="flex justify-end gap-2">
+              <button onClick={onClose} className="px-4 py-2 bg-gray-100 rounded text-gray-700 text-sm">Cancelar</button>
+              <button onClick={handleConfirm} className="px-4 py-2 bg-blue-600 text-white rounded text-sm flex items-center gap-2">
+                <ArrowRight size={16} /> Aplicar Reajuste
+              </button>
             </div>
           </div>
         )}
