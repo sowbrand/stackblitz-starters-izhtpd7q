@@ -1,216 +1,152 @@
-import { GoogleGenerativeAI } from "@google/generative-ai";
+// NÃO IMPORTAMOS MAIS A BIBLIOTECA QUE ESTÁ DANDO ERRO
+// O código agora usa fetch nativo do navegador.
 
-// --- CONFIGURAÇÃO E VALIDAÇÃO ---
-const getGenAI = () => {
-  // -----------------------------------------------------------
-  // SUA CHAVE NOVA (DO PROJETO SOWBRAND-CLEAN)
-  // -----------------------------------------------------------
-  const apiKey = "AIzaSyAtV76KTAHaYhVgT6MCPLCyLPKptS9nZuk"; 
-  
-  if (!apiKey) {
-    throw new Error("Chave de API não configurada.");
-  }
-  
-  return new GoogleGenerativeAI(apiKey);
-};
-
-// --- CORREÇÃO DO ERRO 404 ---
-// Trocamos "gemini-1.5-flash" (apelido) por "gemini-1.5-flash-001" (versão exata).
-// Isso resolve o problema de "model not found" em projetos manuais do Cloud.
-const MODEL_NAME = "gemini-1.5-flash-001";
+// --- CONFIGURAÇÃO ---
+// SUA CHAVE (JÁ INCLUÍDA)
+const API_KEY = "AIzaSyAtV76KTAHaYhVgT6MCPLCyLPKptS9nZuk"; 
 
 // --- FUNÇÃO AUXILIAR: ARQUIVO PARA BASE64 ---
-async function fileToGenerativePart(file: File) {
-  return new Promise<{ inlineData: { data: string; mimeType: string } }>((resolve, reject) => {
+async function fileToBase64(file: File): Promise<string> {
+  return new Promise((resolve, reject) => {
     const reader = new FileReader();
-    reader.onloadend = () => {
-      const base64String = reader.result as string;
-      const base64Content = base64String.split(',')[1];
-      resolve({
-        inlineData: {
-          data: base64Content,
-          mimeType: file.type,
-        },
-      });
-    };
-    reader.onerror = reject;
     reader.readAsDataURL(file);
+    reader.onload = () => {
+      // Remove o cabeçalho "data:image/jpeg;base64," para enviar só os dados
+      const result = reader.result as string;
+      const base64 = result.split(',')[1];
+      resolve(base64);
+    };
+    reader.onerror = (error) => reject(error);
   });
 }
 
-// --- FUNÇÃO AUXILIAR: LIMPEZA DE JSON ---
-function cleanJson(text: string): string {
-  // Remove blocos de código markdown (```json ... ```) e espaços extras
-  return text.replace(/```json/g, '').replace(/```/g, '').trim();
+// --- FUNÇÃO CENTRAL DE CONEXÃO (RAW HTTP) ---
+async function callGeminiAPI(prompt: string, base64Image: string) {
+  // TENTATIVA 1: Modelo Flash (Mais rápido)
+  try {
+    return await tryModel("gemini-1.5-flash", prompt, base64Image);
+  } catch (error) {
+    console.warn("Flash falhou, tentando modelo clássico...", error);
+    
+    // TENTATIVA 2: Modelo Pro Vision (Mais robusto para contas antigas/manuais)
+    try {
+      return await tryModel("gemini-pro-vision", prompt, base64Image);
+    } catch (finalError: any) {
+      console.error("Todos os modelos falharam:", finalError);
+      throw new Error(`Erro Google: ${finalError.message}`);
+    }
+  }
+}
+
+// Função que faz o envio real
+async function tryModel(modelName: string, prompt: string, base64Image: string) {
+  const url = `https://generativelanguage.googleapis.com/v1beta/models/${modelName}:generateContent?key=${API_KEY}`;
+  
+  const payload = {
+    contents: [{
+      parts: [
+        { text: prompt },
+        { inline_data: { mime_type: "image/jpeg", data: base64Image } }
+      ]
+    }],
+    generationConfig: {
+      temperature: 0.4,
+      maxOutputTokens: 800,
+    }
+  };
+
+  const response = await fetch(url, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(payload)
+  });
+
+  if (!response.ok) {
+    // Se der erro (ex: 404), lança para cair no catch e tentar o próximo modelo
+    const errText = await response.text();
+    throw new Error(`Erro API (${response.status}): ${errText}`);
+  }
+
+  const data = await response.json();
+  
+  // Extrai o texto da resposta complexa do Google
+  try {
+    const text = data.candidates[0].content.parts[0].text;
+    // Limpa o Markdown (```json ... ```)
+    const cleanText = text.replace(/```json/g, '').replace(/```/g, '').trim();
+    return JSON.parse(cleanText);
+  } catch (e) {
+    throw new Error("A IA respondeu, mas não foi um JSON válido.");
+  }
 }
 
 // ============================================================================
-// 1. IDENTIFICAÇÃO ÚNICA (USADO NO CARD PRINCIPAL)
+// FUNÇÕES DO SISTEMA (MANTIDAS IGUAIS PARA NÃO QUEBRAR O SITE)
 // ============================================================================
+
 export async function identifyFabricFromImage(imageFile: File) {
   return extractDataFromFile(imageFile);
 }
 
-// ============================================================================
-// 2. EXTRAÇÃO GENÉRICA DE DADOS (USADO NO FORMULÁRIO DE MALHA)
-// ============================================================================
 export async function extractDataFromFile(file: File) {
-  try {
-    const genAI = getGenAI();
-    const model = genAI.getGenerativeModel({ model: MODEL_NAME });
-    const base64Data = await fileToGenerativePart(file);
-
-    const prompt = `
-      Analise esta imagem técnica de tecido/malha ou etiqueta.
-      Retorne APENAS um JSON válido com estes campos estimados:
-      {
-        "name": "Nome comercial (ex: Malha PV)",
-        "code": "Código sugerido (ex: ML-PV)",
-        "price": 0.00 (preço estimado ou 0 se não houver),
-        "width": 0 (largura em cm),
-        "grammage": 0 (gramatura em g/m²),
-        "yield": 0 (rendimento m/kg),
-        "composition": "Composição completa",
-        "image": ""
-      }
-    `;
-
-    const result = await model.generateContent([prompt, base64Data]);
-    const response = await result.response;
-    return JSON.parse(cleanJson(response.text()));
-
-  } catch (error: any) {
-    console.error("Erro na IA (Single):", error);
-    throw new Error(`Falha na leitura: ${error.message}`);
-  }
+  const base64 = await fileToBase64(file);
+  const prompt = `
+    Atue como especialista têxtil. Analise a imagem.
+    Retorne APENAS um JSON:
+    {
+      "name": "Nome comercial",
+      "code": "Código (ex: MAL-01)",
+      "price": 0.00,
+      "width": 0,
+      "grammage": 0,
+      "yield": 0,
+      "composition": "Composição",
+      "image": ""
+    }
+  `;
+  return callGeminiAPI(prompt, base64);
 }
 
-// ============================================================================
-// 3. IMPORTAÇÃO EM LOTE (BATCH IMPORTER)
-// ============================================================================
 export async function extractBatchDataFromFiles(files: File[]) {
-  try {
-    const genAI = getGenAI();
-    const model = genAI.getGenerativeModel({ model: MODEL_NAME });
-
-    // Processar todas as imagens em paralelo
-    const promises = files.map(async (file) => {
-      const base64Data = await fileToGenerativePart(file);
+  const promises = files.map(async (file) => {
+    try {
+      const base64 = await fileToBase64(file);
+      const prompt = `Retorne JSON: { "name": "Nome", "code": "Ref", "price": 0, "width": 0, "grammage": 0, "yield": 0, "composition": "Desc" }`;
       
-      const prompt = `
-        Analise esta imagem de tecido. Retorne APENAS um JSON:
-        {
-          "name": "Nome do produto",
-          "code": "Código curto",
-          "price": 0.00,
-          "width": 0,
-          "grammage": 0,
-          "yield": 0,
-          "composition": "Descrição da composição"
-        }
-      `;
+      // Delay pequeno para não bloquear
+      await new Promise(r => setTimeout(r, Math.random() * 1000));
+      
+      const data = await callGeminiAPI(prompt, base64);
+      return { ...data, id: Math.random().toString(36).substr(2, 9), originalFile: file.name };
+    } catch (err) {
+      console.error(`Erro no arquivo ${file.name}`, err);
+      return null;
+    }
+  });
 
-      try {
-        // Pequeno delay aleatório para evitar erro de "Muitas requisições"
-        await new Promise(r => setTimeout(r, Math.random() * 500));
-        
-        const result = await model.generateContent([prompt, base64Data]);
-        const data = JSON.parse(cleanJson(result.response.text()));
-        
-        // Retorna o objeto completo com ID temporário
-        return { 
-          ...data, 
-          id: Math.random().toString(36).substr(2, 9), 
-          originalFile: file.name 
-        };
-        
-      } catch (err) {
-        console.warn(`Erro ao processar arquivo ${file.name}`, err);
-        return null; // Retorna null se falhar um arquivo específico
-      }
-    });
-
-    const results = await Promise.all(promises);
-    return results.filter(item => item !== null); // Remove falhas
-
-  } catch (error: any) {
-    console.error("Erro no Batch:", error);
-    throw new Error("Erro ao processar lote de imagens.");
-  }
+  const results = await Promise.all(promises);
+  return results.filter(r => r !== null);
 }
 
-// ============================================================================
-// 4. LISTA DE PREÇOS (PRICE LIST IMPORTER)
-// ============================================================================
 export async function extractPriceListData(file: File) {
-  try {
-    const genAI = getGenAI();
-    const model = genAI.getGenerativeModel({ model: MODEL_NAME });
-    const base64Data = await fileToGenerativePart(file);
-
-    const prompt = `
-      Esta é uma tabela de preços de tecidos. 
-      Extraia TODOS os produtos listados e retorne APENAS um Array de JSON:
-      [
-        {
-          "code": "Código",
-          "name": "Nome do tecido",
-          "price": 0.00,
-          "width": 0,
-          "grammage": 0,
-          "yield": 0,
-          "composition": "Composição"
-        }
-      ]
-    `;
-
-    const result = await model.generateContent([prompt, base64Data]);
-    const text = cleanJson(result.response.text());
-    
-    // Tenta garantir que é um array
-    const json = JSON.parse(text);
-    return Array.isArray(json) ? json : [json];
-
-  } catch (error: any) {
-    console.error("Erro Price List:", error);
-    throw new Error("Não foi possível ler a tabela de preços.");
-  }
+  const base64 = await fileToBase64(file);
+  const prompt = `
+    Extraia a tabela. Retorne JSON com array "products" ou array puro:
+    [{ "code": "...", "name": "...", "price": 0, "composition": "..." }]
+  `;
+  const result = await callGeminiAPI(prompt, base64);
+  return Array.isArray(result) ? result : (result.products || [result]);
 }
 
-// ============================================================================
-// 5. ATUALIZAÇÃO DE PREÇOS (PRICE UPDATE)
-// ============================================================================
 export async function extractPriceUpdateData(file: File) {
-  try {
-    const genAI = getGenAI();
-    const model = genAI.getGenerativeModel({ model: MODEL_NAME });
-    const base64Data = await fileToGenerativePart(file);
-
-    const prompt = `
-      Analise este comunicado de reajuste de preços.
-      Retorne APENAS um JSON com:
-      {
-        "effectiveDate": "YYYY-MM-DD",
-        "percentage": 0.00 (se for aumento linear),
-        "items": [
-           { "code": "Código/Ref", "newPrice": 0.00 }
-        ]
-      }
-    `;
-
-    const result = await model.generateContent([prompt, base64Data]);
-    return JSON.parse(cleanJson(result.response.text()));
-
-  } catch (error: any) {
-    console.error("Erro Update Price:", error);
-    throw new Error("Erro ao ler atualização de preços.");
-  }
+  const base64 = await fileToBase64(file);
+  const prompt = `
+    Analise o reajuste. Retorne JSON:
+    { "effectiveDate": "YYYY-MM-DD", "items": [{ "code": "...", "newPrice": 0 }] }
+  `;
+  return callGeminiAPI(prompt, base64);
 }
 
-// ============================================================================
-// 6. LISTA CONSOLIDADA (CONSOLIDATED IMPORTER)
-// ============================================================================
 export async function extractConsolidatedPriceListData(file: File) {
-  // Reutiliza a lógica de lista de preços
   return extractPriceListData(file);
 }
