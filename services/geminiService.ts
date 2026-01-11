@@ -1,8 +1,5 @@
-// NÃO IMPORTAMOS MAIS A BIBLIOTECA QUE ESTÁ DANDO ERRO
-// O código agora usa fetch nativo do navegador.
-
 // --- CONFIGURAÇÃO ---
-// SUA CHAVE (JÁ INCLUÍDA)
+// SUA CHAVE (MANTIDA)
 const API_KEY = "AIzaSyAtV76KTAHaYhVgT6MCPLCyLPKptS9nZuk"; 
 
 // --- FUNÇÃO AUXILIAR: ARQUIVO PARA BASE64 ---
@@ -11,7 +8,6 @@ async function fileToBase64(file: File): Promise<string> {
     const reader = new FileReader();
     reader.readAsDataURL(file);
     reader.onload = () => {
-      // Remove o cabeçalho "data:image/jpeg;base64," para enviar só os dados
       const result = reader.result as string;
       const base64 = result.split(',')[1];
       resolve(base64);
@@ -20,26 +16,55 @@ async function fileToBase64(file: File): Promise<string> {
   });
 }
 
-// --- FUNÇÃO CENTRAL DE CONEXÃO (RAW HTTP) ---
-async function callGeminiAPI(prompt: string, base64Image: string) {
-  // TENTATIVA 1: Modelo Flash (Mais rápido)
+// --- AUTO-DETECÇÃO DE MODELO ---
+// Esta função pergunta ao Google qual modelo está disponível para sua chave
+async function getWorkingModelName(): Promise<string> {
   try {
-    return await tryModel("gemini-1.5-flash", prompt, base64Image);
-  } catch (error) {
-    console.warn("Flash falhou, tentando modelo clássico...", error);
-    
-    // TENTATIVA 2: Modelo Pro Vision (Mais robusto para contas antigas/manuais)
-    try {
-      return await tryModel("gemini-pro-vision", prompt, base64Image);
-    } catch (finalError: any) {
-      console.error("Todos os modelos falharam:", finalError);
-      throw new Error(`Erro Google: ${finalError.message}`);
+    const response = await fetch(
+      `https://generativelanguage.googleapis.com/v1beta/models?key=${API_KEY}`
+    );
+    const data = await response.json();
+
+    if (!data.models) {
+      console.warn("Não foi possível listar modelos. Usando fallback.");
+      return "gemini-1.5-flash"; // Fallback padrão
     }
+
+    // Procura por modelos de visão (Flash ou Pro Vision)
+    // Prioriza o Flash (mais rápido), depois Pro Vision, depois qualquer Pro
+    const models = data.models.map((m: any) => m.name.replace('models/', ''));
+    
+    console.log("Modelos disponíveis na sua conta:", models);
+
+    const preferred = [
+      "gemini-1.5-flash",
+      "gemini-1.5-flash-latest",
+      "gemini-1.5-flash-001",
+      "gemini-pro-vision",
+      "gemini-1.0-pro-vision-latest"
+    ];
+
+    // Tenta encontrar um dos preferidos na lista real do Google
+    for (const pref of preferred) {
+      if (models.includes(pref)) return pref;
+    }
+
+    // Se não achar os exatos, pega qualquer um que tenha 'vision' ou 'flash'
+    const fallback = models.find((m: string) => m.includes('flash') || m.includes('vision'));
+    return fallback || "gemini-1.5-flash";
+
+  } catch (e) {
+    console.error("Erro ao auto-detectar modelo:", e);
+    return "gemini-1.5-flash";
   }
 }
 
-// Função que faz o envio real
-async function tryModel(modelName: string, prompt: string, base64Image: string) {
+// --- FUNÇÃO CENTRAL DE CONEXÃO ---
+async function callGeminiAPI(prompt: string, base64Image: string) {
+  // 1. Descobre o modelo certo dinamicamente
+  const modelName = await getWorkingModelName();
+  console.log(`Tentando conectar usando o modelo: ${modelName}`);
+
   const url = `https://generativelanguage.googleapis.com/v1beta/models/${modelName}:generateContent?key=${API_KEY}`;
   
   const payload = {
@@ -51,37 +76,41 @@ async function tryModel(modelName: string, prompt: string, base64Image: string) 
     }],
     generationConfig: {
       temperature: 0.4,
-      maxOutputTokens: 800,
+      maxOutputTokens: 1000, // Aumentado para garantir JSON completo
     }
   };
 
-  const response = await fetch(url, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify(payload)
-  });
-
-  if (!response.ok) {
-    // Se der erro (ex: 404), lança para cair no catch e tentar o próximo modelo
-    const errText = await response.text();
-    throw new Error(`Erro API (${response.status}): ${errText}`);
-  }
-
-  const data = await response.json();
-  
-  // Extrai o texto da resposta complexa do Google
   try {
-    const text = data.candidates[0].content.parts[0].text;
-    // Limpa o Markdown (```json ... ```)
-    const cleanText = text.replace(/```json/g, '').replace(/```/g, '').trim();
-    return JSON.parse(cleanText);
-  } catch (e) {
-    throw new Error("A IA respondeu, mas não foi um JSON válido.");
+    const response = await fetch(url, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(payload)
+    });
+
+    if (!response.ok) {
+      const errText = await response.text();
+      throw new Error(`Erro Google (${modelName}): ${response.status} - ${errText}`);
+    }
+
+    const data = await response.json();
+    
+    try {
+      const text = data.candidates[0].content.parts[0].text;
+      const cleanText = text.replace(/```json/g, '').replace(/```/g, '').trim();
+      return JSON.parse(cleanText);
+    } catch (e) {
+      console.error("Resposta da IA não foi JSON:", data);
+      throw new Error("A IA respondeu, mas não foi um JSON válido.");
+    }
+
+  } catch (error: any) {
+    console.error("Falha fatal na conexão:", error);
+    throw error;
   }
 }
 
 // ============================================================================
-// FUNÇÕES DO SISTEMA (MANTIDAS IGUAIS PARA NÃO QUEBRAR O SITE)
+// FUNÇÕES DO SISTEMA (MANTIDAS IGUAIS)
 // ============================================================================
 
 export async function identifyFabricFromImage(imageFile: File) {
@@ -113,7 +142,6 @@ export async function extractBatchDataFromFiles(files: File[]) {
       const base64 = await fileToBase64(file);
       const prompt = `Retorne JSON: { "name": "Nome", "code": "Ref", "price": 0, "width": 0, "grammage": 0, "yield": 0, "composition": "Desc" }`;
       
-      // Delay pequeno para não bloquear
       await new Promise(r => setTimeout(r, Math.random() * 1000));
       
       const data = await callGeminiAPI(prompt, base64);
