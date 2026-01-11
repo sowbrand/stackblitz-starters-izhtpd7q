@@ -14,14 +14,13 @@ async function fileToBase64(file: File): Promise<string> {
   });
 }
 
-// --- DESCOBERTA DE MODELO SEGURO ---
+// --- SELEÇÃO DE MODELO ---
 async function pickBestModel(apiKey: string): Promise<string> {
-  // Com base na sua lista, o 'gemini-flash-latest' é o mais seguro para conta gratuita.
-  // Evitamos os 'exp' (experimentais) pois eles têm cota zero ou instável.
+  // Mantemos o flash-latest pois é rápido e sua conta tem acesso
   return "gemini-flash-latest";
 }
 
-// --- CHAMADA API COM TRATAMENTO DE ERRO ROBUSTO ---
+// --- CHAMADA API ---
 async function callGeminiAPI(prompt: string, base64Image: string, apiKey: string) {
   if (!apiKey) throw new Error("Chave de API não fornecida.");
 
@@ -45,11 +44,10 @@ async function callGeminiAPI(prompt: string, base64Image: string, apiKey: string
 
   if (!response.ok) {
     const errText = await response.text();
-    // Se der erro 429 (Muitas requisições), lançamos erro específico
     if (response.status === 429) {
-      throw new Error("Limite de velocidade do Google atingido. Aguardando...");
+      throw new Error("Muitas requisições. Aguardando...");
     }
-    throw new Error(`Erro Google (${modelName} - ${response.status}): ${errText}`);
+    throw new Error(`Erro Google (${response.status}): ${errText}`);
   }
 
   const data = await response.json();
@@ -62,50 +60,88 @@ async function callGeminiAPI(prompt: string, base64Image: string, apiKey: string
 }
 
 // ============================================================================
-// EXPORTS DO SISTEMA
+// EXPORTS DO SISTEMA (CORRIGIDOS PARA 1 PRODUTO ÚNICO)
 // ============================================================================
 
-// 1. Single Extraction
+// 1. Single Extraction (Cadastro Unitário)
 export async function extractDataFromFile(file: File, apiKey: string) {
   const base64 = await fileToBase64(file);
-  const prompt = `Analise a imagem. JSON: { "name": "Nome", "code": "Cod", "price": 0, "width": 0, "grammage": 0, "yield": 0, "composition": "Comp" }`;
+  const prompt = `
+    Analise esta etiqueta técnica de tecido. Extraia os dados para cadastro de UM ÚNICO produto.
+    
+    REGRAS DE EXTRAÇÃO:
+    - Preço: Se houver tabela de cores, use OBRIGATORIAMENTE o valor da cor "BRANCO" na coluna "À VISTA".
+    - Largura: Valor numérico (ex: 1.85).
+    - Gramatura: Valor numérico (ex: 210).
+    - Rendimento: Valor numérico (ex: 2.57).
+    - Composição: Texto completo (ex: 100% Algodão).
+    
+    Retorne APENAS JSON: 
+    { 
+      "name": "Nome do Artigo", 
+      "code": "Código", 
+      "price": 0.00, 
+      "width": 0.00, 
+      "grammage": 0, 
+      "yield": 0.00, 
+      "composition": "Descrição" 
+    }
+  `;
   try {
-    return await callGeminiAPI(prompt, base64, apiKey);
+    const result = await callGeminiAPI(prompt, base64, apiKey);
+    return Array.isArray(result) ? result[0] : result;
   } catch (e) {
     console.error(e);
     throw e;
   }
 }
 
-// 2. Batch Extraction - REESCRITA PARA SER SEQUENCIAL (EVITA ERRO 429)
+// 2. Batch Extraction (Lote) - AGORA RETORNA APENAS 1 ITEM POR ARQUIVO
 export async function extractBatchDataFromFiles(files: File[], apiKey: string) {
   const results = [];
 
-  // Loop FOR...OF garante que processamos UM arquivo de cada vez
-  // O Promise.all anterior tentava todos ao mesmo tempo e o Google bloqueava
   for (const file of files) {
     try {
       const base64 = await fileToBase64(file);
-      const prompt = `Analise o tecido. JSON: { "name": "Nome", "code": "Ref", "price": 0, "composition": "Desc" }`;
+      
+      const prompt = `
+        Analise a imagem técnica de tecido. Extraia os dados para cadastro de UM ÚNICO produto.
+        
+        IMPORTANTE:
+        1. Ignore variações de cor para criar linhas extras. Crie apenas UMA linha por imagem.
+        2. Preço: Use o preço base "BRANCO" / "À VISTA".
+        3. Extraia os dados técnicos (Largura, Gramatura, Rendimento) com precisão.
+
+        Retorne APENAS UM JSON: 
+        { 
+          "name": "Nome", 
+          "code": "Ref", 
+          "price": 0.00, 
+          "width": 0.00, 
+          "grammage": 0, 
+          "yield": 0.00, 
+          "composition": "Desc" 
+        }
+      `;
       
       console.log(`Processando ${file.name}...`);
       
-      // Chama a API
       const data = await callGeminiAPI(prompt, base64, apiKey);
       
+      // Garante que é um objeto único, não array
+      const item = Array.isArray(data) ? data[0] : data;
+
       results.push({ 
-        ...data, 
+        ...item, 
         id: Math.random().toString(36).substr(2, 9), 
         originalFile: file.name 
       });
 
-      // PAUSA OBRIGATÓRIA DE 4 SEGUNDOS ENTRE ARQUIVOS
-      // A conta gratuita permite ~15 requisições/minuto. 4s de pausa garante segurança.
+      // Pausa de segurança (4s)
       await new Promise(resolve => setTimeout(resolve, 4000));
 
     } catch (err) {
       console.error(`Erro ao processar ${file.name}`, err);
-      // Se um falhar, não para os outros, apenas loga e continua
     }
   }
 
@@ -115,7 +151,7 @@ export async function extractBatchDataFromFiles(files: File[], apiKey: string) {
 // 3. Consolidated List
 export async function extractConsolidatedPriceListData(file: File, apiKey: string) {
   const base64 = await fileToBase64(file);
-  const prompt = `Extraia tabela. JSON array "products": [{ "code": "...", "name": "...", "price": 0 }]`;
+  const prompt = `Extraia tabela. Retorne JSON array "products": [{ "code": "...", "name": "...", "price": 0 }]`;
   try {
     const result = await callGeminiAPI(prompt, base64, apiKey);
     return Array.isArray(result) ? result : (result.products || [result]);
@@ -127,7 +163,7 @@ export async function extractConsolidatedPriceListData(file: File, apiKey: strin
 // 4. Price Update
 export async function extractPriceUpdateData(file: File, apiKey: string) {
   const base64 = await fileToBase64(file);
-  const prompt = `Analise reajuste. JSON: { "effectiveDate": "YYYY-MM-DD", "items": [{ "code": "...", "newPrice": 0 }] }`;
+  const prompt = `Analise reajuste. Retorne JSON: { "effectiveDate": "YYYY-MM-DD", "items": [{ "code": "...", "newPrice": 0 }] }`;
   try {
     return await callGeminiAPI(prompt, base64, apiKey);
   } catch (e) {
@@ -135,10 +171,9 @@ export async function extractPriceUpdateData(file: File, apiKey: string) {
   }
 }
 
-// 5. Price List (Alias)
+// 5. Alias
 export async function extractPriceListData(file: File, apiKey: string) {
   return extractConsolidatedPriceListData(file, apiKey);
 }
 
-// Stub
 export async function identifyFabricFromImage(file: File) { return null; }
