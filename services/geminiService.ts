@@ -25,8 +25,8 @@ async function getWorkingModelName(apiKey: string): Promise<string> {
     if (!data.models) return "gemini-1.5-flash";
 
     const models = data.models.map((m: any) => m.name.replace('models/', ''));
-    console.log("Modelos detectados:", models);
-
+    
+    // Prioridades de modelo
     const preferred = ["gemini-1.5-flash", "gemini-1.5-flash-latest", "gemini-pro-vision"];
     for (const pref of preferred) {
       if (models.includes(pref)) return pref;
@@ -38,12 +38,10 @@ async function getWorkingModelName(apiKey: string): Promise<string> {
 }
 
 // --- FUNÇÃO CENTRAL DE CONEXÃO ---
-// Agora recebe a apiKey como argumento obrigatório
 async function callGeminiAPI(prompt: string, base64Image: string, apiKey: string) {
   if (!apiKey) throw new Error("Chave de API não fornecida.");
 
   const modelName = await getWorkingModelName(apiKey);
-  
   const url = `https://generativelanguage.googleapis.com/v1beta/models/${modelName}:generateContent?key=${apiKey}`;
   
   const payload = {
@@ -72,8 +70,9 @@ async function callGeminiAPI(prompt: string, base64Image: string, apiKey: string
   return JSON.parse(cleanText);
 }
 
-// --- EXPORTS ADAPTADOS PARA RECEBER A CHAVE ---
+// --- EXPORTS ---
 
+// 1. Tabela Consolidada
 export async function extractConsolidatedPriceListData(file: File, apiKey: string) {
   const base64 = await fileToBase64(file);
   const prompt = `
@@ -84,10 +83,36 @@ export async function extractConsolidatedPriceListData(file: File, apiKey: strin
   return Array.isArray(result) ? result : (result.products || [result]);
 }
 
-// Adicionei exports vazios para as outras funções não quebrarem a compilação, 
-// mas o foco hoje é o Consolidated.
+// 2. Importação em Lote (Batch) - CORRIGIDA E ATIVADA
+export async function extractBatchDataFromFiles(files: File[], apiKey: string) {
+  const promises = files.map(async (file) => {
+    try {
+      const base64 = await fileToBase64(file);
+      const prompt = `
+        Analise o tecido. Retorne JSON:
+        { "name": "Nome", "code": "Cod", "price": 0, "composition": "Desc" }
+      `;
+      // Delay aleatório para evitar erro de taxa limite
+      await new Promise(r => setTimeout(r, Math.random() * 1000));
+      
+      const data = await callGeminiAPI(prompt, base64, apiKey);
+      return { 
+        ...data, 
+        id: Math.random().toString(36).substr(2, 9), 
+        originalFile: file.name 
+      };
+    } catch (err) {
+      console.warn(`Falha no arquivo ${file.name}`, err);
+      return null;
+    }
+  });
+
+  const results = await Promise.all(promises);
+  return results.filter(r => r !== null);
+}
+
+// Stubs para evitar erro de compilação em outros arquivos não usados agora
 export async function identifyFabricFromImage(file: File) { return null; }
 export async function extractDataFromFile(file: File) { return null; }
-export async function extractBatchDataFromFiles(files: File[]) { return []; }
 export async function extractPriceListData(file: File) { return []; }
 export async function extractPriceUpdateData(file: File) { return null; }
