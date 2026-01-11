@@ -14,10 +14,9 @@ async function fileToBase64(file: File): Promise<string> {
   });
 }
 
-// --- SELEÇÃO DE MODELO ---
+// --- DESCOBERTA DE MODELO SEGURO ---
 async function pickBestModel(apiKey: string): Promise<string> {
-  // Mantemos o flash-latest pois é rápido e sua conta tem acesso
-  return "gemini-flash-latest";
+  return "gemini-1.5-flash"; 
 }
 
 // --- CHAMADA API ---
@@ -36,108 +35,111 @@ async function callGeminiAPI(prompt: string, base64Image: string, apiKey: string
     }]
   };
 
-  const response = await fetch(url, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify(payload)
-  });
+  try {
+    const response = await fetch(url, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(payload)
+    });
 
-  if (!response.ok) {
-    const errText = await response.text();
-    if (response.status === 429) {
-      throw new Error("Muitas requisições. Aguardando...");
+    if (!response.ok) {
+      const errText = await response.text();
+      if (response.status === 429) {
+        throw new Error("Muitas requisições. Aguardando...");
+      }
+      if (response.status === 404) {
+         // Fallback silencioso
+         return callGeminiAPIFallback(prompt, base64Image, apiKey, "gemini-1.5-flash-latest");
+      }
+      throw new Error(`Erro Google (${response.status}): ${errText}`);
     }
-    throw new Error(`Erro Google (${response.status}): ${errText}`);
+
+    const data = await response.json();
+    const text = data.candidates?.[0]?.content?.parts?.[0]?.text;
+    
+    if (!text) throw new Error("A IA não retornou texto.");
+
+    const cleanText = text.replace(/```json/g, '').replace(/```/g, '').trim();
+    return JSON.parse(cleanText);
+  } catch (error: any) {
+    throw error;
   }
+}
 
-  const data = await response.json();
-  const text = data.candidates?.[0]?.content?.parts?.[0]?.text;
-  
-  if (!text) throw new Error("A IA não retornou texto.");
-
-  const cleanText = text.replace(/```json/g, '').replace(/```/g, '').trim();
-  return JSON.parse(cleanText);
+async function callGeminiAPIFallback(prompt: string, base64Image: string, apiKey: string, model: string) {
+    const url = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${apiKey}`;
+    const payload = { contents: [{ parts: [{ text: prompt }, { inline_data: { mime_type: "image/jpeg", data: base64Image } }] }] };
+    const response = await fetch(url, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(payload) });
+    const data = await response.json();
+    const text = data.candidates?.[0]?.content?.parts?.[0]?.text;
+    return JSON.parse(text.replace(/```json/g, '').replace(/```/g, '').trim());
 }
 
 // ============================================================================
-// EXPORTS DO SISTEMA (CORRIGIDOS PARA 1 PRODUTO ÚNICO)
+// EXPORTS DO SISTEMA
 // ============================================================================
 
-// 1. Single Extraction (Cadastro Unitário)
+// 1. Single Extraction
 export async function extractDataFromFile(file: File, apiKey: string) {
   const base64 = await fileToBase64(file);
   const prompt = `
-    Analise esta etiqueta técnica de tecido. Extraia os dados para cadastro de UM ÚNICO produto.
-    
-    REGRAS DE EXTRAÇÃO:
-    - Preço: Se houver tabela de cores, use OBRIGATORIAMENTE o valor da cor "BRANCO" na coluna "À VISTA".
-    - Largura: Valor numérico (ex: 1.85).
-    - Gramatura: Valor numérico (ex: 210).
-    - Rendimento: Valor numérico (ex: 2.57).
-    - Composição: Texto completo (ex: 100% Algodão).
-    
-    Retorne APENAS JSON: 
-    { 
-      "name": "Nome do Artigo", 
-      "code": "Código", 
-      "price": 0.00, 
-      "width": 0.00, 
-      "grammage": 0, 
-      "yield": 0.00, 
-      "composition": "Descrição" 
-    }
+    Analise esta etiqueta técnica.
+    Se houver tabela de preços por cor, pegue o valor da cor BRANCO (À Vista).
+    Retorne JSON: { "name": "", "code": "", "price": 0, "width": 0, "grammage": 0, "yield": 0, "composition": "" }
   `;
   try {
     const result = await callGeminiAPI(prompt, base64, apiKey);
     return Array.isArray(result) ? result[0] : result;
   } catch (e) {
-    console.error(e);
     throw e;
   }
 }
 
-// 2. Batch Extraction (Lote) - AGORA RETORNA APENAS 1 ITEM POR ARQUIVO
+// 2. Batch Extraction (Lote)
 export async function extractBatchDataFromFiles(files: File[], apiKey: string) {
-  const results = [];
+  // CORREÇÃO AQUI: Definindo o tipo do array para evitar o erro
+  const results: any[] = [];
 
   for (const file of files) {
     try {
       const base64 = await fileToBase64(file);
       
       const prompt = `
-        Analise a imagem técnica de tecido. Extraia os dados para cadastro de UM ÚNICO produto.
+        Atue como um importador têxtil. Analise a imagem.
         
-        IMPORTANTE:
-        1. Ignore variações de cor para criar linhas extras. Crie apenas UMA linha por imagem.
-        2. Preço: Use o preço base "BRANCO" / "À VISTA".
-        3. Extraia os dados técnicos (Largura, Gramatura, Rendimento) com precisão.
+        1. DADOS GERAIS: Código (Ref), Nome, Largura, Gramatura, Rendimento, Composição.
+        
+        2. TABELA DE PREÇOS (Se houver):
+           Procure por: BRANCO, CLARA, MÉDIA, ESCURA, EXTRA.
+           Extraia o preço "À VISTA" de cada um.
+        
+        3. GERAÇÃO DE JSON:
+           Gere uma lista. Se houver cores, crie um item para cada cor:
+           Nome: "Nome do Artigo - COR"
+           
+           Se não houver cores, crie apenas um item.
 
-        Retorne APENAS UM JSON: 
-        { 
-          "name": "Nome", 
-          "code": "Ref", 
-          "price": 0.00, 
-          "width": 0.00, 
-          "grammage": 0, 
-          "yield": 0.00, 
-          "composition": "Desc" 
-        }
+        Exemplo JSON de saída:
+        [
+          { "name": "SUEDINE - BRANCO", "code": "76040", "price": 66.01, "width": 1.85, "grammage": 210, "yield": 2.57, "composition": "100% Algodão" },
+          { "name": "SUEDINE - CLARA", "code": "76040", "price": 67.71, "width": 1.85, "grammage": 210, "yield": 2.57, "composition": "100% Algodão" }
+        ]
       `;
       
       console.log(`Processando ${file.name}...`);
       
-      const data = await callGeminiAPI(prompt, base64, apiKey);
+      const responseData = await callGeminiAPI(prompt, base64, apiKey);
       
-      // Garante que é um objeto único, não array
-      const item = Array.isArray(data) ? data[0] : data;
+      const items = Array.isArray(responseData) ? responseData : [responseData];
 
-      results.push({ 
-        ...item, 
-        id: Math.random().toString(36).substr(2, 9), 
-        originalFile: file.name 
+      items.forEach((item: any) => {
+        results.push({ 
+          ...item, 
+          id: Math.random().toString(36).substr(2, 9), 
+          originalFile: file.name 
+        });
       });
 
-      // Pausa de segurança (4s)
       await new Promise(resolve => setTimeout(resolve, 4000));
 
     } catch (err) {
