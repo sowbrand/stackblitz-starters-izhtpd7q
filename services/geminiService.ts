@@ -3,7 +3,7 @@ import { GoogleGenerativeAI } from "@google/generative-ai";
 // --- CONFIGURAÇÃO E VALIDAÇÃO ---
 const getGenAI = () => {
   // -----------------------------------------------------------
-  // SUA CHAVE NOVA JÁ ESTÁ CONFIGURADA AQUI (HARDCODED)
+  // SUA CHAVE NOVA (DO PROJETO SOWBRAND-CLEAN)
   // -----------------------------------------------------------
   const apiKey = "AIzaSyAtV76KTAHaYhVgT6MCPLCyLPKptS9nZuk"; 
   
@@ -14,8 +14,10 @@ const getGenAI = () => {
   return new GoogleGenerativeAI(apiKey);
 };
 
-// Usando o modelo mais moderno e rápido (Flash)
-const MODEL_NAME = "gemini-1.5-flash";
+// --- CORREÇÃO DO ERRO 404 ---
+// Trocamos "gemini-1.5-flash" (apelido) por "gemini-1.5-flash-001" (versão exata).
+// Isso resolve o problema de "model not found" em projetos manuais do Cloud.
+const MODEL_NAME = "gemini-1.5-flash-001";
 
 // --- FUNÇÃO AUXILIAR: ARQUIVO PARA BASE64 ---
 async function fileToGenerativePart(file: File) {
@@ -38,7 +40,7 @@ async function fileToGenerativePart(file: File) {
 
 // --- FUNÇÃO AUXILIAR: LIMPEZA DE JSON ---
 function cleanJson(text: string): string {
-  // Remove blocos de código markdown (```json ... ```)
+  // Remove blocos de código markdown (```json ... ```) e espaços extras
   return text.replace(/```json/g, '').replace(/```/g, '').trim();
 }
 
@@ -115,8 +117,12 @@ export async function extractBatchDataFromFiles(files: File[]) {
         const result = await model.generateContent([prompt, base64Data]);
         const data = JSON.parse(cleanJson(result.response.text()));
         
-        // CORREÇÃO: A linha que estava incompleta agora está correta abaixo
-        return { ...data, id: Math.random().toString(36).substr(2, 9), originalFile: file.name };
+        // Retorna o objeto completo com ID temporário
+        return { 
+          ...data, 
+          id: Math.random().toString(36).substr(2, 9), 
+          originalFile: file.name 
+        };
         
       } catch (err) {
         console.warn(`Erro ao processar arquivo ${file.name}`, err);
