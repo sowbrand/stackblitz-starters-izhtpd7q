@@ -1,203 +1,184 @@
 'use client';
 
 import React, { useState } from 'react';
-import { Supplier, Mesh, ConsolidatedProduct } from '@/types';
+import { Upload, FileText, CheckCircle, AlertCircle, Loader2, ArrowRight } from 'lucide-react';
 import { extractConsolidatedPriceListData } from '@/services/geminiService';
-import { X, FileJson, Loader2 } from 'lucide-react';
 
-interface ConsolidatedPriceImporterProps {
-  supplier: Supplier;
-  allMeshes: Mesh[];
-  setMeshes: React.Dispatch<React.SetStateAction<Mesh[]>>;
-  onClose: () => void;
-}
-
-export const ConsolidatedPriceImporter: React.FC<ConsolidatedPriceImporterProps> = ({ supplier, allMeshes, setMeshes, onClose }) => {
-  const [isLoading, setIsLoading] = useState(false);
+export function ConsolidatedPriceImporter() {
+  const [file, setFile] = useState<File | null>(null);
+  const [loading, setLoading] = useState(false);
+  const [extractedData, setExtractedData] = useState<any[] | null>(null);
   const [error, setError] = useState<string | null>(null);
-  const [fileName, setFileName] = useState<string | null>(null);
-  const [extractedData, setExtractedData] = useState<ConsolidatedProduct[] | null>(null);
-  const [selectedProducts, setSelectedProducts] = useState<Set<string>>(new Set());
+  const [selectedProducts, setSelectedProducts] = useState<Set<any>>(new Set());
 
-  const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (file) {
-      setIsLoading(true);
+  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    if (e.target.files && e.target.files[0]) {
+      setFile(e.target.files[0]);
       setError(null);
-      setFileName(file.name);
       setExtractedData(null);
-      setSelectedProducts(new Set());
-      try {
-        const data = await extractConsolidatedPriceListData(file);
-        setExtractedData(data);
-        const allProductCodes = new Set(data.map(p => p.code));
-        setSelectedProducts(allProductCodes);
-      } catch (err) {
-        setError(err instanceof Error ? err.message : 'Ocorreu um erro desconhecido.');
-      } finally {
-        setIsLoading(false);
-      }
     }
   };
-  
-  const handleToggleProduct = (productCode: string) => {
-    setSelectedProducts(prev => {
-        const newSet = new Set(prev);
-        if (newSet.has(productCode)) newSet.delete(productCode);
-        else newSet.add(productCode);
-        return newSet;
-    });
+
+  const handleProcess = async () => {
+    if (!file) return;
+
+    setLoading(true);
+    setError(null);
+
+    try {
+      const data = await extractConsolidatedPriceListData(file);
+      
+      // Garante que é um array
+      const safeData = Array.isArray(data) ? data : (data as any).products || [];
+      
+      setExtractedData(safeData);
+      
+      // Seleciona tudo por padrão
+      const allCodes = new Set(safeData.map((p: any) => String(p.code || '')));
+      setSelectedProducts(allCodes);
+      
+    } catch (err: any) {
+      console.error(err);
+      setError(err.message || 'Erro ao processar arquivo.');
+    } finally {
+      setLoading(false);
+    }
   };
 
-  const handleToggleAll = () => {
+  const toggleProduct = (code: string) => {
+    const newSelected = new Set(selectedProducts);
+    if (newSelected.has(code)) {
+      newSelected.delete(code);
+    } else {
+      newSelected.add(code);
+    }
+    setSelectedProducts(newSelected);
+  };
+
+  const toggleAll = () => {
     if (!extractedData) return;
     if (selectedProducts.size === extractedData.length) {
-        setSelectedProducts(new Set());
+      setSelectedProducts(new Set());
     } else {
-        setSelectedProducts(new Set(extractedData.map(p => p.code)));
+      const allCodes = new Set(extractedData.map((p: any) => String(p.code || '')));
+      setSelectedProducts(allCodes);
     }
-  };
-
-  const handleImport = () => {
-    if (!extractedData) return;
-
-    const productsToImport = extractedData.filter(p => selectedProducts.has(p.code));
-    let updatedMeshes = [...allMeshes];
-
-    productsToImport.forEach(product => {
-      const existingMeshIndex = updatedMeshes.findIndex(m => m.code === product.code && m.supplierId === supplier.id);
-      
-      const newPrices: Record<string, number> = {};
-      product.price_list.forEach(p => {
-          const key = String(p.category || p.original_label);
-          newPrices[key] = p.price_cash;
-      });
-
-      if (existingMeshIndex > -1) {
-        const existingMesh = updatedMeshes[existingMeshIndex];
-        updatedMeshes[existingMeshIndex] = {
-            ...existingMesh,
-            name: product.name || existingMesh.name,
-            composition: product.specs.composition || existingMesh.composition,
-            width: product.specs?.width_m ? product.specs.width_m * 100 : existingMesh.width,
-            grammage: product.specs?.grammage_gsm || existingMesh.grammage,
-            yield: product.specs?.yield_m_kg || existingMesh.yield,
-            prices: newPrices,
-        };
-      } else {
-        const newMesh: Mesh = {
-          id: Date.now().toString() + Math.random(),
-          name: product.name,
-          code: product.code,
-          supplierId: supplier.id,
-          prices: newPrices,
-          width: product.specs?.width_m ? product.specs.width_m * 100 : 0,
-          grammage: product.specs?.grammage_gsm || 0,
-          yield: product.specs?.yield_m_kg || 0,
-          composition: product.specs.composition || '',
-          complement: product.is_complement ? 'Acessório' : undefined
-        };
-        updatedMeshes.push(newMesh);
-      }
-    });
-
-    setMeshes(updatedMeshes);
-    alert(`${productsToImport.length} produtos importados/atualizados com sucesso!`);
-    onClose();
   };
 
   return (
-    <div className="max-w-6xl mx-auto">
-        <div className="flex justify-between items-center mb-6">
-            <h1 className="text-3xl font-bold text-black">Importador Consolidado: <span className="text-purple-600">{supplier.name}</span></h1>
-            <button onClick={onClose} className="text-gray-500 hover:text-gray-800"><X size={24} /></button>
+    <div className="bg-white p-6 rounded-xl shadow-sm border border-gray-200">
+      <h2 className="text-xl font-bold text-gray-900 mb-4 flex items-center gap-2">
+        <FileText className="text-blue-600" />
+        Importar Tabela Consolidada
+      </h2>
+
+      <div className="space-y-6">
+        {/* Área de Upload */}
+        <div className="border-2 border-dashed border-gray-300 rounded-lg p-8 text-center hover:bg-gray-50 transition-colors">
+          <input
+            type="file"
+            id="consolidated-upload"
+            className="hidden"
+            accept="image/*,.pdf"
+            onChange={handleFileChange}
+          />
+          <label htmlFor="consolidated-upload" className="cursor-pointer flex flex-col items-center">
+            <Upload className="h-10 w-10 text-gray-400 mb-3" />
+            <span className="text-sm font-medium text-gray-700">
+              {file ? file.name : 'Clique para selecionar a imagem da tabela'}
+            </span>
+            <span className="text-xs text-gray-500 mt-1">
+              Suporta JPG, PNG (Tabelas completas)
+            </span>
+          </label>
         </div>
-      
-        <div className="bg-gray-50 border-2 border-dashed border-gray-300 rounded-lg p-6 mb-8 text-center">
-            <h2 className="text-xl font-semibold text-black mb-2">Importar Tabela de Preços Consolidada (IA)</h2>
-            <p className="text-gray-600 mb-4">Envie uma tabela complexa (e.g., FN Malhas) para agrupar produtos e extrair múltiplos preços.</p>
-            <label htmlFor="file-upload" className="cursor-pointer inline-flex items-center justify-center bg-purple-600 text-white font-bold py-2 px-6 rounded-lg shadow-md hover:bg-purple-700 transition-colors duration-300">
-                {isLoading ? <Loader2 className="animate-spin mr-2" /> : <FileJson size={20} className="mr-2" />}
-                {isLoading ? 'Analisando Tabela...' : 'Enviar Arquivo'}
-            </label>
-            <input id="file-upload" type="file" className="hidden" onChange={handleFileChange} disabled={isLoading} accept=".pdf,.png,.jpg,.jpeg" />
-            {fileName && !isLoading && <p className="mt-3 text-sm text-gray-500">Arquivo: {fileName}</p>}
-            {error && <p className="mt-3 text-sm text-red-500">Erro: {error}</p>}
-        </div>
 
-        {extractedData && (
-             <div className="bg-white p-6 rounded-lg shadow-md border">
-                <div className="flex justify-between items-center mb-4">
-                    <h2 className="text-2xl font-bold">Produtos Extraídos e Agrupados</h2>
-                     <div className="flex items-center">
-                        <input 
-                            type="checkbox" id="select-all" className="h-5 w-5 rounded border-gray-300 text-purple-600 focus:ring-purple-500"
-                            checked={selectedProducts.size === extractedData.length}
-                            onChange={handleToggleAll}
-                        />
-                        <label htmlFor="select-all" className="ml-2 font-semibold">Selecionar Todos</label>
-                    </div>
-                </div>
-                <p className="mb-4 text-gray-600">Fornecedor identificado: <span className="font-bold">{extractedData[0]?.supplier}</span>. Revise os produtos agrupados abaixo.</p>
-
-                <div className="space-y-4">
-                    {extractedData.map(product => (
-                        <div key={product.code} className="border rounded-lg p-4 bg-gray-50">
-                             <div className="flex items-start">
-                                <input 
-                                    type="checkbox" id={`product-${product.code}`} className="h-5 w-5 rounded border-gray-400 text-purple-600 focus:ring-purple-500 mt-1"
-                                    checked={selectedProducts.has(product.code)}
-                                    onChange={() => handleToggleProduct(product.code)}
-                                />
-                                <div className="ml-4 flex-grow">
-                                    <div className="flex items-center gap-3">
-                                        <h3 className="text-lg font-bold text-black">{product.name} <span className="font-normal text-gray-500">({product.code})</span></h3>
-                                        {product.is_complement && <span className="text-xs font-bold bg-yellow-200 text-yellow-800 px-2 py-0.5 rounded-full">ACESSÓRIO</span>}
-                                    </div>
-                                    <p className="text-sm text-gray-600">{product.specs.composition}</p>
-                                    <div className="flex gap-4 text-sm mt-1 text-gray-800">
-                                        <span>Largura: <span className="font-semibold">{product.specs.width_m} m</span></span>
-                                        <span>Gramatura: <span className="font-semibold">{product.specs.grammage_gsm} g/m²</span></span>
-                                        <span>Rendimento: <span className="font-semibold">{product.specs.yield_m_kg} m/kg</span></span>
-                                    </div>
-
-                                    <div className="mt-3">
-                                        <table className="w-full text-sm text-left">
-                                            <thead className="bg-gray-200">
-                                                <tr>
-                                                    <th className="p-2 font-semibold text-gray-800">Categoria Original</th>
-                                                    <th className="p-2 font-semibold text-gray-800">Categoria Normalizada</th>
-                                                    <th className="p-2 font-semibold text-gray-800 text-right">Preço (R$/kg)</th>
-                                                </tr>
-                                            </thead>
-                                            <tbody>
-                                            {product.price_list.map((price, index) => (
-                                                <tr key={index} className="border-b">
-                                                    <td className="p-2 text-gray-900">{price.original_label}</td>
-                                                    <td className="p-2"><span className="bg-purple-100 text-purple-800 px-2 py-0.5 rounded-full font-medium">{price.category}</span></td>
-                                                    <td className="p-2 text-right font-mono text-gray-900">R$ {price.price_cash.toFixed(2)}</td>
-                                                </tr>
-                                            ))}
-                                            </tbody>
-                                        </table>
-                                    </div>
-                                </div>
-                             </div>
-                        </div>
-                    ))}
-                </div>
-
-                <div className="mt-6 flex justify-end">
-                    <button 
-                        onClick={handleImport} 
-                        disabled={selectedProducts.size === 0}
-                        className="bg-purple-600 text-white font-bold py-3 px-8 rounded-lg shadow-md hover:bg-purple-700 transition-colors duration-300 disabled:bg-gray-400 disabled:cursor-not-allowed"
-                    >
-                        Importar {selectedProducts.size} {selectedProducts.size === 1 ? 'produto' : 'produtos'}
-                    </button>
-                </div>
-            </div>
+        {/* Botão de Ação */}
+        {file && !extractedData && (
+          <button
+            onClick={handleProcess}
+            disabled={loading}
+            className="w-full py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50 flex items-center justify-center gap-2 font-medium"
+          >
+            {loading ? (
+              <>
+                <Loader2 className="animate-spin" size={18} />
+                Lendo Tabela...
+              </>
+            ) : (
+              'Processar Tabela'
+            )}
+          </button>
         )}
+
+        {/* Exibição de Erro */}
+        {error && (
+          <div className="p-3 bg-red-50 text-red-700 rounded-lg text-sm flex items-center gap-2">
+            <AlertCircle size={16} />
+            {error}
+          </div>
+        )}
+
+        {/* Resultado da Extração */}
+        {extractedData && (
+          <div className="mt-6 border-t pt-6">
+            <div className="flex items-center justify-between mb-4">
+              <div className="flex items-center gap-2 text-green-700 bg-green-50 px-3 py-1 rounded-full text-sm font-medium">
+                <CheckCircle size={16} />
+                {extractedData.length} Produtos Encontrados
+              </div>
+              <button onClick={toggleAll} className="text-sm text-blue-600 hover:underline">
+                {selectedProducts.size === extractedData.length ? 'Desmarcar Todos' : 'Selecionar Todos'}
+              </button>
+            </div>
+
+            <div className="bg-gray-50 rounded-lg p-4 max-h-96 overflow-y-auto">
+              <table className="w-full text-sm text-left">
+                <thead className="text-xs text-gray-500 uppercase border-b bg-gray-100">
+                  <tr>
+                    <th className="px-4 py-2 w-8">
+                      <input 
+                        type="checkbox" 
+                        checked={selectedProducts.size === extractedData.length && extractedData.length > 0}
+                        onChange={toggleAll}
+                        className="rounded border-gray-300 text-blue-600 focus:ring-blue-500"
+                      />
+                    </th>
+                    <th className="px-4 py-2">Código</th>
+                    <th className="px-4 py-2">Nome</th>
+                    <th className="px-4 py-2 text-right">Preço</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-gray-200">
+                  {extractedData?.map((item: any, index: number) => (
+                    <tr key={index} className="hover:bg-white transition-colors">
+                      <td className="px-4 py-2">
+                        <input 
+                          type="checkbox" 
+                          checked={selectedProducts.has(String(item.code || ''))}
+                          onChange={() => toggleProduct(String(item.code || ''))}
+                          className="rounded border-gray-300 text-blue-600 focus:ring-blue-500"
+                        />
+                      </td>
+                      <td className="px-4 py-2 font-medium text-gray-900">{item.code || '---'}</td>
+                      <td className="px-4 py-2 text-gray-600">{item.name}</td>
+                      <td className="px-4 py-2 text-right font-bold text-green-600">
+                        R$ {Number(item.price || 0).toFixed(2)}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+
+            <div className="mt-4 flex justify-end">
+              <button className="flex items-center gap-2 bg-blue-600 text-white px-6 py-2 rounded-lg hover:bg-blue-700 font-medium">
+                Importar {selectedProducts.size} Selecionados <ArrowRight size={16} />
+              </button>
+            </div>
+          </div>
+        )}
+      </div>
     </div>
   );
-};
+}
