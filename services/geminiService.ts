@@ -2,13 +2,15 @@ import { GoogleGenerativeAI } from "@google/generative-ai";
 
 // --- CONFIGURAÇÃO E VALIDAÇÃO ---
 const getGenAI = () => {
-  const apiKey = process.env.NEXT_PUBLIC_GEMINI_API_KEY;
+  // --- TESTE NUCLEAR: CHAVE DIRETA NO CÓDIGO ---
+  const apiKey = "AIzaSyCi9nCsh-NiYG_Vzs_dom6LXjJjA647mhQ";
   
-  if (!apiKey || apiKey.includes('SuaChaveAqui')) {
-    console.error("ERRO CRÍTICO: Chave de API inválida ou não encontrada.");
+  // Verificação de segurança simples
+  if (!apiKey) {
     throw new Error("Chave de API não configurada corretamente.");
   }
   
+  // ESTA ERA A LINHA QUE ESTAVA FALTANDO OU COM ERRO:
   return new GoogleGenerativeAI(apiKey);
 };
 
@@ -81,7 +83,7 @@ export async function extractDataFromFile(file: File) {
 }
 
 // ============================================================================
-// 3. IMPORTAÇÃO EM LOTE (BATCH) - Recebe Array de Arquivos
+// 3. IMPORTAÇÃO EM LOTE (BATCH)
 // ============================================================================
 export async function extractBatchDataFromFiles(files: File[]) {
   try {
@@ -190,9 +192,8 @@ export async function extractPriceUpdateData(file: File) {
 }
 
 // ============================================================================
-// 6. LISTA CONSOLIDADA (CONSOLIDATED IMPORTER) - CORRIGIDO AQUI
+// 6. LISTA CONSOLIDADA (CONSOLIDATED IMPORTER)
 // ============================================================================
-// Correção: Agora aceita um único arquivo 'File', e não 'File[]'
 export async function extractConsolidatedPriceListData(file: File) {
   return extractPriceListData(file);
 }
