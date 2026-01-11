@@ -3,7 +3,7 @@ import { GoogleGenerativeAI } from "@google/generative-ai";
 // --- CONFIGURAÇÃO E VALIDAÇÃO ---
 const getGenAI = () => {
   // --- TESTE NUCLEAR: CHAVE DIRETA NO CÓDIGO ---
-  const apiKey = "AIzaSyCi9nCsh-NiYG_Vzs_dom6LXjJjA647mhQ";
+  const apiKey = "AIzaSyAtV76KTAHaYhVgT6MCPLCyLPKptS9nZuk";
   
   // Verificação de segurança simples
   if (!apiKey) {
@@ -13,6 +13,7 @@ const getGenAI = () => {
   // ESTA ERA A LINHA QUE ESTAVA FALTANDO OU COM ERRO:
   return new GoogleGenerativeAI(apiKey);
 };
+
 // Voltando para o modelo correto e rápido
 const MODEL_NAME = "gemini-1.5-flash";
 // --- FUNÇÃO AUXILIAR: ARQUIVO PARA BASE64 ---
