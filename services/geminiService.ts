@@ -14,8 +14,8 @@ const getGenAI = () => {
   return new GoogleGenerativeAI(apiKey);
 };
 
-// Modelo padrão (Mais rápido e compatível)
-const MODEL_NAME = "gemini-pro";
+// Usando a versão numérica específica para evitar erro 404
+const MODEL_NAME = "gemini-1.5-flash-001";
 // --- FUNÇÃO AUXILIAR: ARQUIVO PARA BASE64 ---
 async function fileToGenerativePart(file: File) {
   return new Promise<{ inlineData: { data: string; mimeType: string } }>((resolve, reject) => {
