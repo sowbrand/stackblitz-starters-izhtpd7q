@@ -15,8 +15,7 @@ const getGenAI = () => {
 };
 
 // Modelo padrão (Mais rápido e compatível)
-const MODEL_NAME = "gemini-1.5-flash";
-
+const MODEL_NAME = "gemini-pro";
 // --- FUNÇÃO AUXILIAR: ARQUIVO PARA BASE64 ---
 async function fileToGenerativePart(file: File) {
   return new Promise<{ inlineData: { data: string; mimeType: string } }>((resolve, reject) => {
