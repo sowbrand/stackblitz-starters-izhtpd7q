@@ -1,116 +1,109 @@
 'use client';
 
 import React, { useState } from 'react';
-import { Supplier, Mesh } from '@/types';
+import { Upload, FileText, CheckCircle, AlertCircle, Loader2, ArrowRight, X, Key } from 'lucide-react';
 import { extractPriceListData } from '@/services/geminiService';
-import { Upload, X, CheckCircle, Loader2, FileText } from 'lucide-react';
 
-interface PriceListImporterProps {
-  supplier: Supplier;
-  onImport: (meshes: Mesh[]) => void;
-  onCancel: () => void;
-  existingMeshes: Mesh[];
+interface Props {
+  onClose: () => void;
+  onImport: (data: any[]) => void;
 }
 
-export const PriceListImporter: React.FC<PriceListImporterProps> = ({ supplier, onImport, onCancel, existingMeshes }) => {
-  const [isLoading, setIsLoading] = useState(false);
+export function PriceListImporter({ onClose, onImport }: Props) {
+  const [file, setFile] = useState<File | null>(null);
+  const [loading, setLoading] = useState(false);
+  const [extractedData, setExtractedData] = useState<any[] | null>(null);
   const [error, setError] = useState<string | null>(null);
-  const [extractedData, setExtractedData] = useState<any>(null);
+  const [manualKey, setManualKey] = useState('');
 
-  const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (file) {
-      setIsLoading(true);
+  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    if (e.target.files && e.target.files[0]) {
+      setFile(e.target.files[0]);
       setError(null);
       setExtractedData(null);
-      try {
-        const data = await extractPriceListData(file);
-        setExtractedData(data);
-      } catch (err) {
-        setError(err instanceof Error ? err.message : 'Ocorreu um erro desconhecido.');
-      } finally {
-        setIsLoading(false);
-      }
     }
   };
 
-  const handleConfirmImport = () => {
-    if (!extractedData || !extractedData.products) return;
+  const handleProcess = async () => {
+    if (!file) return;
+    if (!manualKey) {
+      setError("Por favor, cole sua Chave de API no campo amarelo.");
+      return;
+    }
+    setLoading(true);
+    setError(null);
+    try {
+      // CORREÇÃO: Passando a chave manual aqui
+      const data = await extractPriceListData(file, manualKey);
+      const safeData = Array.isArray(data) ? data : (data as any).products || [];
+      setExtractedData(safeData);
+    } catch (err: any) {
+      setError(err.message || 'Erro ao processar arquivo.');
+    } finally {
+      setLoading(false);
+    }
+  };
 
-    const newMeshes: Mesh[] = extractedData.products.map((product: any) => {
-      // Verifica se já existe pelo código para manter dados antigos se necessário
-      // mas neste caso estamos criando novos ou atualizando totalmente
-      const prices: Record<string, number> = {};
-      product.price_list.forEach((p: any) => {
-          prices[p.category_normalized || p.original_category_name] = p.price_cash_kg;
-      });
-
-      return {
-        id: Date.now().toString() + Math.random().toString(),
-        supplierId: supplier.id,
-        code: product.product_code,
-        name: product.product_name,
-        composition: product.composition,
-        width: product.specs.width_m ? product.specs.width_m * 100 : 0,
-        grammage: product.specs.grammage_gsm || 0,
-        yield: 0, // Tabela simples muitas vezes não tem rendimento
-        prices: prices,
-        complement: ''
-      };
-    });
-
-    onImport(newMeshes);
+  const handleConfirm = () => {
+    if (extractedData) {
+      onImport(extractedData);
+      onClose();
+    }
   };
 
   return (
-    <div className="bg-white p-6 rounded-lg shadow-lg max-w-2xl mx-auto">
+    <div className="bg-white p-6 h-full flex flex-col">
       <div className="flex justify-between items-center mb-6">
-        <h2 className="text-2xl font-bold flex items-center gap-2">
-          <FileText className="text-blue-600" />
-          Importar Tabela Simples: <span className="text-blue-600">{supplier.name}</span>
+        <h2 className="text-xl font-bold text-gray-900 flex items-center gap-2">
+          <FileText className="text-blue-600" /> Importar Tabela Simples
         </h2>
-        <button onClick={onCancel} className="text-gray-500 hover:text-gray-700"><X size={24} /></button>
+        <button onClick={onClose} className="text-gray-500 hover:text-gray-700"><X size={24} /></button>
       </div>
-
-      {!extractedData ? (
-        <div className="border-2 border-dashed border-gray-300 rounded-lg p-12 text-center bg-gray-50">
-           {isLoading ? (
-            <div className="flex flex-col items-center">
-              <Loader2 className="h-12 w-12 text-blue-600 animate-spin mb-4" />
-              <p className="text-gray-600 font-medium">Analisando tabela...</p>
+      <div className="space-y-4 flex-1 overflow-y-auto">
+        {!extractedData && (
+          <div className="bg-yellow-50 p-4 rounded-lg border border-yellow-200">
+            <label className="block text-sm font-bold text-yellow-800 mb-2 flex items-center gap-2">
+              <Key size={16} /> Chave API Google:
+            </label>
+            <input type="text" value={manualKey} onChange={(e) => setManualKey(e.target.value)} placeholder="AIzaSy..." className="w-full p-2 border border-yellow-300 rounded bg-white text-gray-800 text-sm outline-none" />
+          </div>
+        )}
+        {!extractedData && (
+          <div className="border-2 border-dashed border-gray-300 rounded-lg p-8 text-center hover:bg-gray-50">
+            <input type="file" id="pl-up" className="hidden" accept="image/*,.pdf" onChange={handleFileChange} />
+            <label htmlFor="pl-up" className="cursor-pointer flex flex-col items-center">
+              <Upload className="h-10 w-10 text-gray-400 mb-3" />
+              <span className="text-sm font-medium text-gray-700">{file ? file.name : 'Selecionar Imagem'}</span>
+            </label>
+          </div>
+        )}
+        {file && !extractedData && (
+          <button onClick={handleProcess} disabled={loading} className="w-full py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50 flex items-center justify-center gap-2">
+            {loading ? <Loader2 className="animate-spin" size={18} /> : 'Processar Agora'}
+          </button>
+        )}
+        {error && <div className="p-3 bg-red-50 text-red-700 rounded-lg text-sm flex items-center gap-2"><AlertCircle size={16} /> {error}</div>}
+        {extractedData && (
+          <div className="border-t pt-4">
+            <div className="bg-white border rounded-lg max-h-80 overflow-y-auto">
+              <table className="w-full text-sm text-left">
+                <tbody>
+                  {extractedData.map((item: any, i: number) => (
+                    <tr key={i} className="hover:bg-gray-50 border-b">
+                      <td className="p-3 font-medium">{item.code}</td>
+                      <td className="p-3 text-right font-bold text-green-600">R$ {item.price}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
             </div>
-          ) : (
-            <>
-                <p className="text-gray-600 mb-6">Envie uma tabela de preços simples (PDF ou Imagem) para extração.</p>
-                {error && <div className="mb-4 text-red-500 bg-red-100 p-2 rounded">{error}</div>}
-                
-                <label className="cursor-pointer bg-blue-600 hover:bg-blue-700 text-white px-6 py-3 rounded-md font-medium transition-colors inline-flex items-center gap-2">
-                    <Upload size={20} />
-                    Selecionar Arquivo
-                    <input type="file" accept="image/*,.pdf" className="hidden" onChange={handleFileChange} />
-                </label>
-            </>
-          )}
-        </div>
-      ) : (
-        <div className="space-y-6">
-            <div className="bg-green-50 p-4 rounded border border-green-200">
-                <h3 className="font-bold text-green-800 flex items-center mb-2">
-                    <CheckCircle size={20} className="mr-2"/> Sucesso!
-                </h3>
-                <p className="text-green-700">
-                    Foram identificados <strong>{extractedData.products.length}</strong> produtos na tabela do fornecedor <strong>{extractedData.supplier_name}</strong>.
-                </p>
+            <div className="mt-4 flex justify-end gap-2">
+              <button onClick={onClose} className="px-4 py-2 bg-gray-100 rounded text-gray-700">Cancelar</button>
+              <button onClick={handleConfirm} className="px-4 py-2 bg-blue-600 text-white rounded">Importar</button>
             </div>
-            
-            <div className="flex justify-end gap-3">
-                <button onClick={() => setExtractedData(null)} className="px-4 py-2 text-gray-600 hover:bg-gray-100 rounded">Voltar</button>
-                <button onClick={handleConfirmImport} className="px-6 py-2 bg-blue-600 text-white font-bold rounded hover:bg-blue-700">
-                    Confirmar Importação
-                </button>
-            </div>
-        </div>
-      )}
+          </div>
+        )}
+      </div>
     </div>
   );
-};
+}
