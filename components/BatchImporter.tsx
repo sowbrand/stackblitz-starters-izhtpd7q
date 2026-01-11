@@ -4,13 +4,15 @@ import React, { useState } from 'react';
 import { Upload, FileText, CheckCircle, AlertCircle, Loader2, X, Key, Plus } from 'lucide-react';
 import { extractBatchDataFromFiles } from '@/services/geminiService';
 
+// Ajustamos a interface para aceitar o que a página pai (page.tsx) envia
 interface Props {
-  onClose: () => void;
-  // Ajuste: Aceita função para salvar os dados no pai
+  supplier: any;          // Recebe o fornecedor atual
+  existingMeshes?: any[]; // Recebe malhas existentes (opcional)
+  onCancel: () => void;   // A página usa 'onCancel' em vez de 'onClose'
   onImport: (data: any[]) => void;
 }
 
-export function BatchImporter({ onClose, onImport }: Props) {
+export function BatchImporter({ supplier, onCancel, onImport }: Props) {
   const [files, setFiles] = useState<File[]>([]);
   const [loading, setLoading] = useState(false);
   const [extractedData, setExtractedData] = useState<any[] | null>(null);
@@ -36,11 +38,10 @@ export function BatchImporter({ onClose, onImport }: Props) {
     setError(null);
 
     try {
-      // Envia a chave manual para o serviço
       const data = await extractBatchDataFromFiles(files, manualKey);
       
       if (data.length === 0) {
-        throw new Error("Nenhum dado foi extraído. Verifique a chave ou as imagens.");
+        throw new Error("Nenhum dado foi extraído.");
       }
 
       setExtractedData(data);
@@ -55,8 +56,21 @@ export function BatchImporter({ onClose, onImport }: Props) {
 
   const handleConfirmImport = () => {
     if (extractedData) {
-      onImport(extractedData);
-      onClose();
+      // Formata os dados antes de devolver para a página pai
+      // Adicionando o ID do fornecedor corretamente
+      const formattedData = extractedData.map(item => ({
+        ...item,
+        supplierId: supplier?.id, // Vincula ao fornecedor atual
+        // Garante campos numéricos
+        price: Number(item.price || 0),
+        width: Number(item.width || 0),
+        grammage: Number(item.grammage || 0),
+        yield: Number(item.yield || 0),
+        type: 'Malha'
+      }));
+
+      onImport(formattedData);
+      onCancel(); // Fecha o modal
     }
   };
 
@@ -65,9 +79,9 @@ export function BatchImporter({ onClose, onImport }: Props) {
       <div className="flex justify-between items-center mb-6">
         <h2 className="text-xl font-bold text-gray-900 flex items-center gap-2">
           <FileText className="text-blue-600" />
-          Importação em Lote (Várias Imagens)
+          Importação em Lote ({supplier?.name || 'Fornecedor'})
         </h2>
-        <button onClick={onClose} className="text-gray-500 hover:text-gray-700">
+        <button onClick={onCancel} className="text-gray-500 hover:text-gray-700">
           <X size={24} />
         </button>
       </div>
@@ -146,7 +160,6 @@ export function BatchImporter({ onClose, onImport }: Props) {
                     <tr key={i} className="border-b hover:bg-gray-50">
                       <td className="p-3 text-gray-500 text-xs truncate max-w-[100px]">{item.originalFile}</td>
                       <td className="p-3 font-medium">{item.name || '---'}</td>
-                      {/* AQUI ESTAVA O ERRO: product_code -> code */}
                       <td className="p-3">{item.code || '---'}</td>
                       <td className="p-3 text-right text-green-600 font-bold">
                         R$ {Number(item.price || 0).toFixed(2)}
@@ -158,7 +171,7 @@ export function BatchImporter({ onClose, onImport }: Props) {
             </div>
 
             <div className="flex justify-end gap-2">
-              <button onClick={onClose} className="px-4 py-2 bg-gray-100 rounded text-gray-700">Cancelar</button>
+              <button onClick={onCancel} className="px-4 py-2 bg-gray-100 rounded text-gray-700">Cancelar</button>
               <button onClick={handleConfirmImport} className="px-4 py-2 bg-blue-600 text-white rounded flex items-center gap-2">
                 <Plus size={16} /> Adicionar ao Sistema
               </button>
