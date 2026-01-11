@@ -4,12 +4,15 @@ import React, { useState } from 'react';
 import { Upload, FileText, CheckCircle, AlertCircle, Loader2, ArrowRight, X, Key } from 'lucide-react';
 import { extractPriceListData } from '@/services/geminiService';
 
+// CORREÇÃO: Interface alinhada com os outros componentes
 interface Props {
+  supplier: any;
+  allMeshes: any[];
+  setMeshes: (meshes: any[]) => void;
   onClose: () => void;
-  onImport: (data: any[]) => void;
 }
 
-export function PriceListImporter({ onClose, onImport }: Props) {
+export function PriceListImporter({ supplier, allMeshes, setMeshes, onClose }: Props) {
   const [file, setFile] = useState<File | null>(null);
   const [loading, setLoading] = useState(false);
   const [extractedData, setExtractedData] = useState<any[] | null>(null);
@@ -33,7 +36,6 @@ export function PriceListImporter({ onClose, onImport }: Props) {
     setLoading(true);
     setError(null);
     try {
-      // CORREÇÃO: Passando a chave manual aqui
       const data = await extractPriceListData(file, manualKey);
       const safeData = Array.isArray(data) ? data : (data as any).products || [];
       setExtractedData(safeData);
@@ -46,7 +48,24 @@ export function PriceListImporter({ onClose, onImport }: Props) {
 
   const handleConfirm = () => {
     if (extractedData) {
-      onImport(extractedData);
+      // Cria novos produtos a partir da lista simples
+      const newMeshes = extractedData.map((item: any) => ({
+        id: Math.random().toString(36).substr(2, 9),
+        name: item.name || 'Sem nome',
+        code: item.code || 'S/C',
+        price: Number(item.price || 0),
+        supplierId: supplier?.id,
+        // Valores padrão para lista simples
+        width: 0, 
+        grammage: 0, 
+        yield: 0, 
+        composition: '', 
+        type: 'Malha', 
+        imageUrl: '', 
+        color: ''
+      }));
+
+      setMeshes([...allMeshes, ...newMeshes]);
       onClose();
     }
   };
@@ -85,6 +104,9 @@ export function PriceListImporter({ onClose, onImport }: Props) {
         {error && <div className="p-3 bg-red-50 text-red-700 rounded-lg text-sm flex items-center gap-2"><AlertCircle size={16} /> {error}</div>}
         {extractedData && (
           <div className="border-t pt-4">
+            <div className="flex items-center gap-2 text-green-700 font-medium mb-3">
+                <CheckCircle size={16} /> {extractedData.length} Itens Identificados
+            </div>
             <div className="bg-white border rounded-lg max-h-80 overflow-y-auto">
               <table className="w-full text-sm text-left">
                 <tbody>
@@ -99,7 +121,7 @@ export function PriceListImporter({ onClose, onImport }: Props) {
             </div>
             <div className="mt-4 flex justify-end gap-2">
               <button onClick={onClose} className="px-4 py-2 bg-gray-100 rounded text-gray-700">Cancelar</button>
-              <button onClick={handleConfirm} className="px-4 py-2 bg-blue-600 text-white rounded">Importar</button>
+              <button onClick={handleConfirm} className="px-4 py-2 bg-blue-600 text-white rounded">Importar Tudo</button>
             </div>
           </div>
         )}
