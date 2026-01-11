@@ -4,7 +4,6 @@ import React, { useState } from 'react';
 import { Upload, FileText, CheckCircle, AlertCircle, Loader2, X, Key, ArrowRight, RefreshCw } from 'lucide-react';
 import { extractPriceUpdateData } from '@/services/geminiService';
 
-// CORREÇÃO: Interface alinhada com o que o page.tsx envia
 interface Props {
   supplier: any;
   allMeshes: any[];
@@ -49,7 +48,7 @@ export function PriceUpdateImporter({ supplier, allMeshes, setMeshes, onClose }:
       const items = Array.isArray(data.items) ? data.items : [];
       const date = data.effectiveDate || new Date().toISOString().split('T')[0];
 
-      // Calcula quantos produtos do sistema coincidem com o código do arquivo
+      // Conta quantos produtos serão afetados
       let matches = 0;
       const sysCodes = new Set(allMeshes.map(m => String(m.code).trim().toUpperCase()));
       
@@ -76,7 +75,6 @@ export function PriceUpdateImporter({ supplier, allMeshes, setMeshes, onClose }:
   const handleConfirm = () => {
     if (!extractedData || !extractedData.items) return;
 
-    // Cria um mapa para acesso rápido: Código -> Novo Preço
     const priceMap = new Map();
     extractedData.items.forEach((item: any) => {
         if (item.code && item.newPrice) {
@@ -84,10 +82,8 @@ export function PriceUpdateImporter({ supplier, allMeshes, setMeshes, onClose }:
         }
     });
 
-    // Atualiza a lista de malhas
     const updatedMeshes = allMeshes.map(mesh => {
         const meshCode = String(mesh.code).trim().toUpperCase();
-        // Só atualiza se pertencer ao fornecedor atual E tiver preço novo
         if (mesh.supplierId === supplier.id && priceMap.has(meshCode)) {
             return { ...mesh, price: priceMap.get(meshCode) };
         }
@@ -103,7 +99,7 @@ export function PriceUpdateImporter({ supplier, allMeshes, setMeshes, onClose }:
       <div className="flex justify-between items-center mb-6">
         <h2 className="text-xl font-bold text-gray-900 flex items-center gap-2">
           <RefreshCw className="text-blue-600" />
-          Atualizar Preços ({supplier?.name})
+          Atualizar Preços
         </h2>
         <button onClick={onClose} className="text-gray-500 hover:text-gray-700">
           <X size={24} />
@@ -112,7 +108,6 @@ export function PriceUpdateImporter({ supplier, allMeshes, setMeshes, onClose }:
 
       <div className="space-y-4 flex-1 overflow-y-auto">
         
-        {/* CAMPO DE CHAVE MANUAL */}
         {!extractedData && (
           <div className="bg-yellow-50 p-3 rounded-lg border border-yellow-200">
             <label className="block text-xs font-bold text-yellow-800 mb-1 flex items-center gap-1">
@@ -162,10 +157,10 @@ export function PriceUpdateImporter({ supplier, allMeshes, setMeshes, onClose }:
               <p><strong>Data de Vigência:</strong> {extractedData.effectiveDate}</p>
               <p className="mt-1 flex items-center gap-2">
                  <CheckCircle size={16}/> 
-                 Encontrados {extractedData.items.length} itens no arquivo.
+                 Encontrados {extractedData.items.length} itens.
               </p>
               <p className="mt-1 font-bold">
-                 {updatedCount} produtos do sistema serão atualizados.
+                 {updatedCount} produtos serão atualizados.
               </p>
             </div>
 
@@ -202,9 +197,9 @@ export function PriceUpdateImporter({ supplier, allMeshes, setMeshes, onClose }:
               <button 
                 onClick={handleConfirm} 
                 disabled={updatedCount === 0}
-                className="px-4 py-2 bg-blue-600 text-white rounded text-sm flex items-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
+                className="px-4 py-2 bg-blue-600 text-white rounded text-sm flex items-center gap-2 disabled:opacity-50"
               >
-                <ArrowRight size={16} /> Confirmar Atualização
+                <ArrowRight size={16} /> Confirmar
               </button>
             </div>
           </div>

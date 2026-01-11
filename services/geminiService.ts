@@ -65,76 +65,45 @@ async function callGeminiAPI(prompt: string, base64Image: string, apiKey: string
 
 // --- EXPORTS ---
 
-// 1. Single Extraction (Cadastro de Malha)
 export async function extractDataFromFile(file: File, apiKey: string) {
   const base64 = await fileToBase64(file);
-  const prompt = `
-    Analise esta imagem técnica de tecido. Retorne JSON:
-    {
-      "name": "Nome sugerido",
-      "code": "Código sugerido",
-      "price": 0.00,
-      "width": 0,
-      "grammage": 0,
-      "yield": 0,
-      "composition": "Composição",
-      "image": ""
-    }
-  `;
-  try {
-    return await callGeminiAPI(prompt, base64, apiKey);
-  } catch (e) {
-    return { name: "", code: "", price: 0 };
-  }
+  const prompt = `Analise. JSON: { "name": "Nome", "code": "Cod", "price": 0, "width": 0, "grammage": 0, "yield": 0, "composition": "Comp", "image": "" }`;
+  try { return await callGeminiAPI(prompt, base64, apiKey); } 
+  catch (e) { return { name: "", code: "", price: 0 }; }
 }
 
-// 2. Batch Extraction
 export async function extractBatchDataFromFiles(files: File[], apiKey: string) {
   const promises = files.map(async (file) => {
     try {
       const base64 = await fileToBase64(file);
-      const prompt = `Analise o tecido. Retorne JSON: { "name": "Nome", "code": "Cod", "price": 0, "composition": "Desc" }`;
+      const prompt = `Analise. JSON: { "name": "Nome", "code": "Cod", "price": 0, "composition": "Desc" }`;
       await new Promise(r => setTimeout(r, Math.random() * 500));
       const data = await callGeminiAPI(prompt, base64, apiKey);
       return { ...data, id: Math.random().toString(36).substr(2, 9), originalFile: file.name };
-    } catch (err) {
-      return null;
-    }
+    } catch (err) { return null; }
   });
   const results = await Promise.all(promises);
   return results.filter(r => r !== null);
 }
 
-// 3. Consolidated List
 export async function extractConsolidatedPriceListData(file: File, apiKey: string) {
   const base64 = await fileToBase64(file);
   const prompt = `Extraia tabela. JSON array "products": [{ "code": "...", "name": "...", "price": 0 }]`;
   try {
     const result = await callGeminiAPI(prompt, base64, apiKey);
     return Array.isArray(result) ? result : (result.products || [result]);
-  } catch (e) {
-    return [];
-  }
+  } catch (e) { return []; }
 }
 
-// 4. Price Update
 export async function extractPriceUpdateData(file: File, apiKey: string) {
   const base64 = await fileToBase64(file);
-  const prompt = `
-    Analise o comunicado de reajuste. Retorne JSON:
-    { "effectiveDate": "YYYY-MM-DD", "percentage": 0, "items": [{ "code": "...", "newPrice": 0 }] }
-  `;
-  try {
-    return await callGeminiAPI(prompt, base64, apiKey);
-  } catch (e) {
-    return { effectiveDate: new Date().toISOString(), items: [] };
-  }
+  const prompt = `Analise reajuste. JSON: { "effectiveDate": "YYYY-MM-DD", "items": [{ "code": "...", "newPrice": 0 }] }`;
+  try { return await callGeminiAPI(prompt, base64, apiKey); } 
+  catch (e) { return { effectiveDate: new Date().toISOString(), items: [] }; }
 }
 
-// 5. Price List (O erro estava aqui - agora está alinhado)
 export async function extractPriceListData(file: File, apiKey: string) {
   return extractConsolidatedPriceListData(file, apiKey);
 }
 
-// Stub
 export async function identifyFabricFromImage(file: File) { return null; }

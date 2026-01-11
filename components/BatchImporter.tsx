@@ -6,7 +6,7 @@ import { extractBatchDataFromFiles } from '@/services/geminiService';
 
 interface Props {
   supplier: any;
-  existingMeshes?: any[];
+  existingMeshes?: any[]; // Compatibilidade
   onCancel: () => void;
   onImport: (data: any[]) => void;
 }
@@ -89,7 +89,7 @@ export function BatchImporter({ supplier, onCancel, onImport }: Props) {
         )}
         {files.length > 0 && !extractedData && (
           <button onClick={handleProcess} disabled={loading} className="w-full py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50 flex items-center justify-center gap-2">
-            {loading ? <Loader2 className="animate-spin" size={18} /> : 'Iniciar Processamento'}
+            {loading ? <Loader2 className="animate-spin" size={18} /> : 'Iniciar'}
           </button>
         )}
         {error && <div className="p-3 bg-red-50 text-red-700 rounded-lg text-sm flex items-center gap-2"><AlertCircle size={16} /> {error}</div>}

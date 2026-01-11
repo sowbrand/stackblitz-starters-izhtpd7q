@@ -4,15 +4,14 @@ import React, { useState } from 'react';
 import { Upload, FileText, CheckCircle, AlertCircle, Loader2, ArrowRight, X, Key } from 'lucide-react';
 import { extractPriceListData } from '@/services/geminiService';
 
-// CORREÇÃO: Interface alinhada com os outros componentes
 interface Props {
   supplier: any;
-  allMeshes: any[];
-  setMeshes: (meshes: any[]) => void;
-  onClose: () => void;
+  existingMeshes?: any[]; // Adicionado para evitar erro de compilação
+  onCancel: () => void;   // A página usa onCancel
+  onImport: (data: any[]) => void;
 }
 
-export function PriceListImporter({ supplier, allMeshes, setMeshes, onClose }: Props) {
+export function PriceListImporter({ supplier, existingMeshes, onCancel, onImport }: Props) {
   const [file, setFile] = useState<File | null>(null);
   const [loading, setLoading] = useState(false);
   const [extractedData, setExtractedData] = useState<any[] | null>(null);
@@ -48,25 +47,17 @@ export function PriceListImporter({ supplier, allMeshes, setMeshes, onClose }: P
 
   const handleConfirm = () => {
     if (extractedData) {
-      // Cria novos produtos a partir da lista simples
+      // Converte para o formato de malha esperado
       const newMeshes = extractedData.map((item: any) => ({
         id: Math.random().toString(36).substr(2, 9),
         name: item.name || 'Sem nome',
         code: item.code || 'S/C',
         price: Number(item.price || 0),
         supplierId: supplier?.id,
-        // Valores padrão para lista simples
-        width: 0, 
-        grammage: 0, 
-        yield: 0, 
-        composition: '', 
-        type: 'Malha', 
-        imageUrl: '', 
-        color: ''
+        width: 0, grammage: 0, yield: 0, composition: '', type: 'Malha', imageUrl: '', color: ''
       }));
-
-      setMeshes([...allMeshes, ...newMeshes]);
-      onClose();
+      onImport(newMeshes);
+      onCancel();
     }
   };
 
@@ -76,7 +67,7 @@ export function PriceListImporter({ supplier, allMeshes, setMeshes, onClose }: P
         <h2 className="text-xl font-bold text-gray-900 flex items-center gap-2">
           <FileText className="text-blue-600" /> Importar Tabela Simples
         </h2>
-        <button onClick={onClose} className="text-gray-500 hover:text-gray-700"><X size={24} /></button>
+        <button onClick={onCancel} className="text-gray-500 hover:text-gray-700"><X size={24} /></button>
       </div>
       <div className="space-y-4 flex-1 overflow-y-auto">
         {!extractedData && (
@@ -120,7 +111,7 @@ export function PriceListImporter({ supplier, allMeshes, setMeshes, onClose }: P
               </table>
             </div>
             <div className="mt-4 flex justify-end gap-2">
-              <button onClick={onClose} className="px-4 py-2 bg-gray-100 rounded text-gray-700">Cancelar</button>
+              <button onClick={onCancel} className="px-4 py-2 bg-gray-100 rounded text-gray-700">Cancelar</button>
               <button onClick={handleConfirm} className="px-4 py-2 bg-blue-600 text-white rounded">Importar Tudo</button>
             </div>
           </div>
