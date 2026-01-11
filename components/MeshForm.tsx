@@ -1,10 +1,18 @@
 'use client';
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Upload, FileText, Loader2, AlertCircle, Key } from 'lucide-react';
 import { extractDataFromFile } from '@/services/geminiService';
 
-// Interfaces simples para o componente funcionar
+// Interface ajustada para o que a página pai está enviando (conforme o erro)
+interface MeshFormProps {
+  onSubmit: (data: any) => void;       // Antes era onSuccess, o pai manda onSubmit
+  onCancel: () => void;
+  initialData?: any | null;
+  suppliers?: any[];                   // O pai manda a lista de fornecedores
+  preselectedSupplierId?: string;      // O pai manda preselectedSupplierId
+}
+
 interface ExtractedData {
   name?: string;
   code?: string;
@@ -15,24 +23,14 @@ interface ExtractedData {
   composition?: string;
 }
 
-interface MeshFormProps {
-  supplierId: string;
-  onSuccess: () => void;
-  onCancel: () => void;
-  // Adicione outras props se necessário, mas estas são as básicas usadas
-  initialData?: any; 
-}
-
-export function MeshForm({ supplierId, onSuccess, onCancel }: MeshFormProps) {
+export function MeshForm({ onSubmit, onCancel, initialData, suppliers = [], preselectedSupplierId }: MeshFormProps) {
   const [file, setFile] = useState<File | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [extractedRaw, setExtractedRaw] = useState<ExtractedData | undefined>(undefined);
   
-  // NOVO: Estado para a chave manual
+  // Estado da Chave Manual
   const [manualKey, setManualKey] = useState('');
 
-  // Estados do formulário
   const [formData, setFormData] = useState({
     name: '',
     code: '',
@@ -42,8 +40,27 @@ export function MeshForm({ supplierId, onSuccess, onCancel }: MeshFormProps) {
     yield: 0,
     composition: '',
     type: 'Malha',
-    color: ''
+    color: '',
+    supplierId: preselectedSupplierId || '' // Usa o ID pré-selecionado
   });
+
+  // Preenche dados se for edição
+  useEffect(() => {
+    if (initialData) {
+      setFormData({
+        name: initialData.name || '',
+        code: initialData.code || '',
+        price: Number(initialData.price || 0),
+        width: Number(initialData.width || 0),
+        grammage: Number(initialData.grammage || 0),
+        yield: Number(initialData.yield || 0),
+        composition: initialData.composition || '',
+        type: initialData.type || 'Malha',
+        color: initialData.color || '',
+        supplierId: initialData.supplierId || preselectedSupplierId || ''
+      });
+    }
+  }, [initialData, preselectedSupplierId]);
 
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     if (e.target.files && e.target.files[0]) {
@@ -63,11 +80,9 @@ export function MeshForm({ supplierId, onSuccess, onCancel }: MeshFormProps) {
     setError(null);
 
     try {
-      // Passa a chave manual
       const data = await extractDataFromFile(file, manualKey);
-      setExtractedRaw(data);
       
-      // Preenche o formulário
+      // Preenche o formulário com dados da IA, mantendo o que já estava se a IA falhar em algo
       setFormData(prev => ({
         ...prev,
         name: data.name || prev.name,
@@ -88,36 +103,37 @@ export function MeshForm({ supplierId, onSuccess, onCancel }: MeshFormProps) {
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    // Aqui viria a lógica de salvar no banco/estado global
-    // Simulando sucesso por enquanto
-    console.log("Salvando:", { ...formData, supplierId });
-    onSuccess();
+    // Chama a função onSubmit passada pelo pai com os dados do formulário
+    onSubmit(formData);
   };
 
   return (
-    <div className="bg-white p-6 rounded-lg shadow-sm">
-      <h2 className="text-xl font-bold mb-4">Nova Malha / Tecido</h2>
+    <div className="bg-white p-6 rounded-lg shadow-sm border border-gray-200">
+      <h2 className="text-xl font-bold mb-4 text-gray-900">
+        {initialData ? 'Editar Malha' : 'Nova Malha / Tecido'}
+      </h2>
       
-      {/* CAMPO DE CHAVE MANUAL - IGUAL AOS OUTROS COMPONENTES */}
+      {/* CAMPO DE CHAVE MANUAL */}
       <div className="bg-yellow-50 p-3 rounded-lg border border-yellow-200 mb-6">
         <label className="block text-xs font-bold text-yellow-800 mb-1 flex items-center gap-1">
-          <Key size={14} /> Chave API Google:
+          <Key size={14} /> Chave API Google (AI Studio):
         </label>
         <input 
           type="text" 
           value={manualKey}
           onChange={(e) => setManualKey(e.target.value)}
           placeholder="Cole sua chave AIzaSy... aqui"
-          className="w-full p-2 border border-yellow-300 rounded bg-white text-xs"
+          className="w-full p-2 border border-yellow-300 rounded bg-white text-xs text-gray-800"
         />
+        <p className="text-[10px] text-yellow-700 mt-1">Obrigatório para usar a IA.</p>
       </div>
 
       {/* Upload e IA */}
-      <div className="mb-6 border-b pb-6">
+      <div className="mb-6 border-b border-gray-100 pb-6">
         <label className="block text-sm font-medium text-gray-700 mb-2">Preenchimento Automático com IA</label>
         <div className="flex gap-2">
            <input type="file" id="mesh-upload" className="hidden" accept="image/*" onChange={handleFileChange} />
-           <label htmlFor="mesh-upload" className="flex-1 cursor-pointer border border-gray-300 rounded-md p-2 text-center text-sm hover:bg-gray-50 flex items-center justify-center gap-2">
+           <label htmlFor="mesh-upload" className="flex-1 cursor-pointer border border-gray-300 rounded-md p-2 text-center text-sm hover:bg-gray-50 flex items-center justify-center gap-2 text-gray-600">
               <Upload size={16} /> {file ? file.name : "Selecionar Imagem"}
            </label>
            <button 
@@ -135,21 +151,41 @@ export function MeshForm({ supplierId, onSuccess, onCancel }: MeshFormProps) {
 
       {/* Formulário Manual */}
       <form onSubmit={handleSubmit} className="space-y-4">
+        {/* Se houver lista de fornecedores, mostra select, senão input oculto */}
+        {suppliers.length > 0 && !preselectedSupplierId && (
+           <div>
+            <label className="block text-sm text-gray-700">Fornecedor</label>
+            <select
+              className="w-full border rounded p-2 text-sm"
+              value={formData.supplierId}
+              onChange={e => setFormData({...formData, supplierId: e.target.value})}
+              required
+            >
+              <option value="">Selecione...</option>
+              {suppliers.map((s: any) => (
+                <option key={s.id} value={s.id}>{s.name}</option>
+              ))}
+            </select>
+           </div>
+        )}
+
         <div className="grid grid-cols-2 gap-4">
           <div>
             <label className="block text-sm text-gray-700">Código</label>
             <input 
-              className="w-full border rounded p-2" 
+              className="w-full border rounded p-2 text-sm" 
               value={formData.code} 
               onChange={e => setFormData({...formData, code: e.target.value})}
+              required
             />
           </div>
           <div>
             <label className="block text-sm text-gray-700">Nome</label>
             <input 
-              className="w-full border rounded p-2" 
+              className="w-full border rounded p-2 text-sm" 
               value={formData.name} 
               onChange={e => setFormData({...formData, name: e.target.value})}
+              required
             />
           </div>
         </div>
@@ -159,7 +195,7 @@ export function MeshForm({ supplierId, onSuccess, onCancel }: MeshFormProps) {
             <label className="block text-sm text-gray-700">Preço (R$)</label>
             <input 
               type="number" step="0.01"
-              className="w-full border rounded p-2" 
+              className="w-full border rounded p-2 text-sm" 
               value={formData.price} 
               onChange={e => setFormData({...formData, price: Number(e.target.value)})}
             />
@@ -168,7 +204,7 @@ export function MeshForm({ supplierId, onSuccess, onCancel }: MeshFormProps) {
             <label className="block text-sm text-gray-700">Largura (cm)</label>
             <input 
                type="number"
-               className="w-full border rounded p-2" 
+               className="w-full border rounded p-2 text-sm" 
                value={formData.width} 
                onChange={e => setFormData({...formData, width: Number(e.target.value)})}
             />
@@ -177,7 +213,7 @@ export function MeshForm({ supplierId, onSuccess, onCancel }: MeshFormProps) {
             <label className="block text-sm text-gray-700">Gramatura</label>
             <input 
                type="number"
-               className="w-full border rounded p-2" 
+               className="w-full border rounded p-2 text-sm" 
                value={formData.grammage} 
                onChange={e => setFormData({...formData, grammage: Number(e.target.value)})}
             />
@@ -187,15 +223,15 @@ export function MeshForm({ supplierId, onSuccess, onCancel }: MeshFormProps) {
         <div>
           <label className="block text-sm text-gray-700">Composição</label>
           <input 
-             className="w-full border rounded p-2" 
+             className="w-full border rounded p-2 text-sm" 
              value={formData.composition} 
              onChange={e => setFormData({...formData, composition: e.target.value})}
           />
         </div>
 
-        <div className="flex justify-end gap-2 pt-4">
-          <button type="button" onClick={onCancel} className="px-4 py-2 border rounded text-gray-700">Cancelar</button>
-          <button type="submit" className="px-4 py-2 bg-green-600 text-white rounded hover:bg-green-700">Salvar Malha</button>
+        <div className="flex justify-end gap-2 pt-4 border-t border-gray-100 mt-4">
+          <button type="button" onClick={onCancel} className="px-4 py-2 border rounded text-gray-700 hover:bg-gray-50 text-sm font-medium">Cancelar</button>
+          <button type="submit" className="px-4 py-2 bg-green-600 text-white rounded hover:bg-green-700 text-sm font-medium">Salvar</button>
         </div>
       </form>
     </div>
