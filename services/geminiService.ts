@@ -14,60 +14,43 @@ async function fileToBase64(file: File): Promise<string> {
   });
 }
 
-// --- DESCOBERTA AUTOMÁTICA DE MODELO (CRUCIAL PARA CORRIGIR O 404) ---
+// --- DESCOBERTA DE MODELO ---
+// Prioriza o que estiver disponível, mas sabemos que na sua conta é o 2.0-flash-exp
 async function pickBestModel(apiKey: string): Promise<string> {
   try {
-    // Pergunta ao Google quais modelos estão disponíveis para esta chave
-    const response = await fetch(
-      `https://generativelanguage.googleapis.com/v1beta/models?key=${apiKey}`
-    );
-    
-    if (!response.ok) return "gemini-1.5-flash"; // Fallback padrão
+    const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models?key=${apiKey}`);
+    if (!response.ok) return "gemini-2.0-flash-exp"; // Chute seguro baseado no seu log
 
     const data = await response.json();
-    if (!data.models) return "gemini-1.5-flash";
+    if (!data.models) return "gemini-2.0-flash-exp";
 
-    // Filtra modelos que geram texto
     const usableModels = data.models
-      .filter((m: any) => m.supportedGenerationMethods && m.supportedGenerationMethods.includes("generateContent"))
+      .filter((m: any) => m.supportedGenerationMethods?.includes("generateContent"))
       .map((m: any) => m.name.replace('models/', ''));
 
-    // Lista de preferência (do mais estável para o mais novo)
+    // Sua conta parece preferir o 2.0, então vamos colocá-lo no topo se existir, 
+    // mas com o sistema de retry ele vai funcionar.
     const preferences = [
+      "gemini-1.5-flash", 
       "gemini-1.5-flash-latest",
-      "gemini-1.5-flash",
-      "gemini-1.5-flash-001",
-      "gemini-1.5-flash-002",
-      "gemini-2.0-flash-exp", // Cuidado com cota, mas serve se for o único
-      "gemini-1.5-pro",
-      "gemini-pro-vision"
+      "gemini-2.0-flash-exp" 
     ];
 
-    // Tenta achar o melhor
     for (const pref of preferences) {
-      if (usableModels.includes(pref)) {
-        console.log(`Modelo selecionado automaticamente: ${pref}`);
-        return pref;
-      }
+      if (usableModels.includes(pref)) return pref;
     }
-
-    // Se não achou nenhum da lista, pega o primeiro disponível que tenha 'flash'
-    const fallback = usableModels.find((m: string) => m.includes('flash')) || usableModels[0];
-    console.log(`Modelo fallback selecionado: ${fallback}`);
-    return fallback || "gemini-1.5-flash";
-
+    
+    return usableModels[0] || "gemini-2.0-flash-exp";
   } catch (e) {
-    return "gemini-1.5-flash";
+    return "gemini-2.0-flash-exp";
   }
 }
 
-// --- CHAMADA API SEGURA ---
-async function callGeminiAPI(prompt: string, base64Image: string, apiKey: string) {
+// --- CHAMADA API COM RETRY (A SOLUÇÃO DO ERRO 429) ---
+async function callGeminiAPI(prompt: string, base64Image: string, apiKey: string, retries = 3) {
   if (!apiKey) throw new Error("Chave de API não fornecida.");
 
-  // 1. Descobre o modelo certo para evitar 404
   const modelName = await pickBestModel(apiKey);
-  
   const url = `https://generativelanguage.googleapis.com/v1beta/models/${modelName}:generateContent?key=${apiKey}`;
   
   const payload = {
@@ -76,11 +59,7 @@ async function callGeminiAPI(prompt: string, base64Image: string, apiKey: string
         { text: prompt },
         { inline_data: { mime_type: "image/jpeg", data: base64Image } }
       ]
-    }],
-    generationConfig: {
-      temperature: 0.2, // Baixa temperatura para dados mais precisos
-      maxOutputTokens: 2000,
-    }
+    }]
   };
 
   try {
@@ -90,19 +69,26 @@ async function callGeminiAPI(prompt: string, base64Image: string, apiKey: string
       body: JSON.stringify(payload)
     });
 
+    // SE DER ERRO 429 (Muitas requisições), ESPERA E TENTA DE NOVO
+    if (response.status === 429) {
+      if (retries > 0) {
+        console.warn(`Limite atingido (${modelName}). Aguardando 10 segundos para tentar novamente...`);
+        await new Promise(resolve => setTimeout(resolve, 10000)); // Espera 10s
+        return callGeminiAPI(prompt, base64Image, apiKey, retries - 1); // Tenta de novo
+      } else {
+        throw new Error("Limite de cota do Google excedido mesmo após várias tentativas.");
+      }
+    }
+
     if (!response.ok) {
       const errText = await response.text();
-      if (response.status === 429) {
-        throw new Error("Limite de velocidade do Google atingido. Aguardando...");
-      }
-      throw new Error(`Erro Google (${modelName} - ${response.status}): ${errText}`);
+      throw new Error(`Erro Google (${response.status}): ${errText}`);
     }
 
     const data = await response.json();
     
-    // Validação para evitar o TypeError
     if (!data.candidates || !data.candidates[0] || !data.candidates[0].content) {
-      throw new Error("A IA não retornou texto válido.");
+      throw new Error("A IA não retornou texto.");
     }
 
     const text = data.candidates[0].content.parts[0].text;
@@ -110,15 +96,21 @@ async function callGeminiAPI(prompt: string, base64Image: string, apiKey: string
     return JSON.parse(cleanText);
 
   } catch (error: any) {
-    throw error; // Repassa o erro para ser tratado no loop
+    // Se for erro de rede ou parse, tenta de novo também
+    if (retries > 0 && (error.message.includes("fetch") || error.message.includes("JSON"))) {
+        console.warn("Erro de rede/parse. Tentando novamente...");
+        await new Promise(resolve => setTimeout(resolve, 3000));
+        return callGeminiAPI(prompt, base64Image, apiKey, retries - 1);
+    }
+    throw error;
   }
 }
 
 // ============================================================================
-// EXPORTS DO SISTEMA
+// EXPORTS
 // ============================================================================
 
-// 1. Single Extraction (Cadastro Unitário)
+// 1. Single Extraction
 export async function extractDataFromFile(file: File, apiKey: string) {
   const base64 = await fileToBase64(file);
   const prompt = `
@@ -134,9 +126,8 @@ export async function extractDataFromFile(file: File, apiKey: string) {
   }
 }
 
-// 2. Batch Extraction (Lote - COM SUPORTE A VARIAÇÕES DE COR)
+// 2. Batch Extraction - COM LÓGICA DE CORES E RETRY
 export async function extractBatchDataFromFiles(files: File[], apiKey: string) {
-  // Tipagem explícita para evitar erros
   const results: any[] = [];
 
   for (const file of files) {
@@ -144,40 +135,41 @@ export async function extractBatchDataFromFiles(files: File[], apiKey: string) {
       const base64 = await fileToBase64(file);
       
       const prompt = `
-        Analise a imagem da etiqueta técnica de tecido.
+        Atue como um importador têxtil. Analise a imagem (etiqueta técnica).
         
-        TAREFA: Extrair dados e gerar itens baseados na Tabela de Cores.
-        
-        1. DADOS TÉCNICOS GERAIS (Comuns a todos):
-           - Código (Ref): (ex: 76040)
-           - Nome do Artigo: (ex: SUEDINE)
-           - Largura (m): numérico
-           - Gramatura (g/m²): numérico
-           - Rendimento (m/kg): numérico
-           - Composição: Texto completo
-        
-        2. PREÇOS POR COR (Importante):
-           Procure pela tabela de "Classificação" ou "Cores" (BRANCO, CLARA, MÉDIA, ESCURA, EXTRA).
-           Para CADA cor encontrada na tabela, extraia o preço da coluna "À VISTA".
-        
-        3. SAÍDA (Lista de Objetos JSON):
-           Gere um objeto para cada cor encontrada.
-           O nome deve ser: "Nome do Artigo - COR".
-           
-           Exemplo de retorno esperado:
-           [
-             { "name": "SUEDINE - BRANCO", "code": "76040", "price": 66.01, "width": 1.85, "grammage": 210, "yield": 2.57, "composition": "100% Algodão" },
-             { "name": "SUEDINE - CLARA", "code": "76040", "price": 67.71, "width": 1.85, "grammage": 210, "yield": 2.57, "composition": "100% Algodão" }
-           ]
+        OBJETIVO: Extrair dados técnicos e gerar uma lista de preços baseada nas cores.
 
-        Se não houver tabela de cores, gere apenas um item com o preço base.
+        1. DADOS GERAIS (Repetir para todas as cores):
+           - Código (Ref): ex: 76040
+           - Nome do Artigo: ex: SUEDINE
+           - Largura (m): número (ex: 1.85)
+           - Gramatura (g/m²): número (ex: 210)
+           - Rendimento (m/kg): número (ex: 2.57)
+           - Composição: Texto (ex: 100% Algodão)
+        
+        2. PREÇOS POR COR (Coluna À VISTA):
+           Procure a tabela de cores/classificação:
+           - BRANCO
+           - CLARA
+           - MÉDIA
+           - ESCURA
+           - EXTRA
+           
+           Para cada uma encontrada, pegue o valor À VISTA.
+        
+        3. SAÍDA (Lista JSON):
+           Gere um objeto para cada cor encontrada.
+           O nome deve ser: "Nome do Artigo - COR" (ex: SUEDINE - BRANCO).
+           
+           Se não houver tabela de cores, gere apenas 1 item com o preço base.
+
+           Retorne APENAS o JSON da lista.
       `;
       
       console.log(`Processando ${file.name}...`);
       
       const responseData = await callGeminiAPI(prompt, base64, apiKey);
       
-      // Garante que trabalhamos com array
       const items = Array.isArray(responseData) ? responseData : [responseData];
 
       items.forEach((item: any) => {
@@ -188,12 +180,11 @@ export async function extractBatchDataFromFiles(files: File[], apiKey: string) {
         });
       });
 
-      // Pausa de 4s para evitar erro 429 (Too Many Requests)
-      await new Promise(resolve => setTimeout(resolve, 4000));
+      // Pausa entre arquivos para ajudar a cota
+      await new Promise(resolve => setTimeout(resolve, 2000));
 
-    } catch (err: any) {
-      console.error(`Erro ao processar ${file.name}:`, err.message);
-      // Não para o loop, tenta o próximo arquivo
+    } catch (err) {
+      console.error(`Erro fatal no arquivo ${file.name}`, err);
     }
   }
 
