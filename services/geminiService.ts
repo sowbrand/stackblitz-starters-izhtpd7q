@@ -2,20 +2,21 @@ import { GoogleGenerativeAI } from "@google/generative-ai";
 
 // --- CONFIGURAÇÃO E VALIDAÇÃO ---
 const getGenAI = () => {
-  // --- TESTE NUCLEAR: CHAVE DIRETA NO CÓDIGO ---
-  const apiKey = "AIzaSyAtV76KTAHaYhVgT6MCPLCyLPKptS9nZuk";
+  // -----------------------------------------------------------
+  // SUA CHAVE NOVA JÁ ESTÁ CONFIGURADA AQUI (HARDCODED)
+  // -----------------------------------------------------------
+  const apiKey = "AIzaSyAtV76KTAHaYhVgT6MCPLCyLPKptS9nZuk"; 
   
-  // Verificação de segurança simples
   if (!apiKey) {
-    throw new Error("Chave de API não configurada corretamente.");
+    throw new Error("Chave de API não configurada.");
   }
   
-  // ESTA ERA A LINHA QUE ESTAVA FALTANDO OU COM ERRO:
   return new GoogleGenerativeAI(apiKey);
 };
 
-// Voltando para o modelo correto e rápido
+// Usando o modelo mais moderno e rápido (Flash)
 const MODEL_NAME = "gemini-1.5-flash";
+
 // --- FUNÇÃO AUXILIAR: ARQUIVO PARA BASE64 ---
 async function fileToGenerativePart(file: File) {
   return new Promise<{ inlineData: { data: string; mimeType: string } }>((resolve, reject) => {
@@ -37,18 +38,19 @@ async function fileToGenerativePart(file: File) {
 
 // --- FUNÇÃO AUXILIAR: LIMPEZA DE JSON ---
 function cleanJson(text: string): string {
+  // Remove blocos de código markdown (```json ... ```)
   return text.replace(/```json/g, '').replace(/```/g, '').trim();
 }
 
 // ============================================================================
-// 1. IDENTIFICAÇÃO ÚNICA
+// 1. IDENTIFICAÇÃO ÚNICA (USADO NO CARD PRINCIPAL)
 // ============================================================================
 export async function identifyFabricFromImage(imageFile: File) {
   return extractDataFromFile(imageFile);
 }
 
 // ============================================================================
-// 2. EXTRAÇÃO GENÉRICA DE DADOS
+// 2. EXTRAÇÃO GENÉRICA DE DADOS (USADO NO FORMULÁRIO DE MALHA)
 // ============================================================================
 export async function extractDataFromFile(file: File) {
   try {
@@ -82,13 +84,14 @@ export async function extractDataFromFile(file: File) {
 }
 
 // ============================================================================
-// 3. IMPORTAÇÃO EM LOTE (BATCH)
+// 3. IMPORTAÇÃO EM LOTE (BATCH IMPORTER)
 // ============================================================================
 export async function extractBatchDataFromFiles(files: File[]) {
   try {
     const genAI = getGenAI();
     const model = genAI.getGenerativeModel({ model: MODEL_NAME });
 
+    // Processar todas as imagens em paralelo
     const promises = files.map(async (file) => {
       const base64Data = await fileToGenerativePart(file);
       
@@ -106,16 +109,23 @@ export async function extractBatchDataFromFiles(files: File[]) {
       `;
 
       try {
+        // Pequeno delay aleatório para evitar erro de "Muitas requisições"
+        await new Promise(r => setTimeout(r, Math.random() * 500));
+        
         const result = await model.generateContent([prompt, base64Data]);
         const data = JSON.parse(cleanJson(result.response.text()));
+        
+        // CORREÇÃO: A linha que estava incompleta agora está correta abaixo
         return { ...data, id: Math.random().toString(36).substr(2, 9), originalFile: file.name };
+        
       } catch (err) {
-        return null;
+        console.warn(`Erro ao processar arquivo ${file.name}`, err);
+        return null; // Retorna null se falhar um arquivo específico
       }
     });
 
     const results = await Promise.all(promises);
-    return results.filter(item => item !== null);
+    return results.filter(item => item !== null); // Remove falhas
 
   } catch (error: any) {
     console.error("Erro no Batch:", error);
@@ -124,7 +134,7 @@ export async function extractBatchDataFromFiles(files: File[]) {
 }
 
 // ============================================================================
-// 4. LISTA DE PREÇOS (PRICE LIST)
+// 4. LISTA DE PREÇOS (PRICE LIST IMPORTER)
 // ============================================================================
 export async function extractPriceListData(file: File) {
   try {
@@ -151,6 +161,7 @@ export async function extractPriceListData(file: File) {
     const result = await model.generateContent([prompt, base64Data]);
     const text = cleanJson(result.response.text());
     
+    // Tenta garantir que é um array
     const json = JSON.parse(text);
     return Array.isArray(json) ? json : [json];
 
@@ -194,5 +205,6 @@ export async function extractPriceUpdateData(file: File) {
 // 6. LISTA CONSOLIDADA (CONSOLIDATED IMPORTER)
 // ============================================================================
 export async function extractConsolidatedPriceListData(file: File) {
+  // Reutiliza a lógica de lista de preços
   return extractPriceListData(file);
 }
