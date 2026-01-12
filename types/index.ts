@@ -1,10 +1,8 @@
-// types/index.ts
-
 export interface Supplier {
   id: string;
   name: string;
-  shortName: string; // Ex: "URBANO"
-  color: string;     // Ex: "#FF0000"
+  shortName: string;
+  color: string;
   contact?: string;
   phone?: string;
   email?: string;
@@ -22,6 +20,7 @@ export interface Mesh {
   supplierId: string;
   code: string;
   name: string;
+  category: string; // NOVO CAMPO
   composition: string;
   width: number;
   grammage: number;
@@ -29,7 +28,7 @@ export interface Mesh {
   ncm?: string;
   complement?: string;
   variations: PriceVariation[];
-  price?: number;
+  price?: number; // Mantido para compatibilidade
   type?: string;
   imageUrl?: string;
 }

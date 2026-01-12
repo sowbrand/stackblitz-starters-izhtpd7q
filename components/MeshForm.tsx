@@ -3,12 +3,14 @@
 import React, { useState, useEffect } from 'react';
 import { Plus, Trash2, Save, X, Layers, DollarSign, FileText } from 'lucide-react';
 import { Mesh, PriceVariation, Supplier } from '@/types';
+import { PRODUCT_CATEGORIES } from '@/lib/constants';
 
 interface MeshFormData {
   id?: string;
   supplierId: string;
   code: string;
   name: string;
+  category: string; // Garantindo que category existe aqui
   composition: string;
   width: number;
   grammage: number;
@@ -27,10 +29,12 @@ interface MeshFormProps {
 }
 
 export function MeshForm({ onSubmit, onCancel, initialData, suppliers = [], preselectedSupplierId }: MeshFormProps) {
+  // Estado inicial tipado corretamente
   const [formData, setFormData] = useState<MeshFormData>({
     supplierId: preselectedSupplierId || '',
     code: '',
     name: '',
+    category: '', 
     composition: '',
     width: 0,
     grammage: 0,
@@ -47,6 +51,7 @@ export function MeshForm({ onSubmit, onCancel, initialData, suppliers = [], pres
         supplierId: initialData.supplierId || preselectedSupplierId || '',
         code: initialData.code || '',
         name: initialData.name || '',
+        category: initialData.category || '',
         composition: initialData.composition || '',
         width: Number(initialData.width || 0),
         grammage: Number(initialData.grammage || 0),
@@ -58,7 +63,13 @@ export function MeshForm({ onSubmit, onCancel, initialData, suppliers = [], pres
           : [{ id: '1', name: 'Única', priceCash: Number(initialData.price || 0), priceFactored: 0 }]
       });
     } else {
-        addVariation();
+        // Se for novo, adiciona uma linha de variação vazia
+        if (formData.variations.length === 0) {
+            setFormData(prev => ({
+                ...prev,
+                variations: [{ id: Math.random().toString(36).substr(2, 9), name: '', priceCash: 0, priceFactored: 0 }]
+            }));
+        }
     }
   }, [initialData, preselectedSupplierId]);
 
@@ -90,16 +101,25 @@ export function MeshForm({ onSubmit, onCancel, initialData, suppliers = [], pres
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
+    
     if (formData.variations.length === 0) {
         alert("Adicione pelo menos uma variação de preço/cor.");
         return;
     }
+    
+    if (!formData.category) {
+        alert("Selecione uma categoria para o produto.");
+        return;
+    }
+
     const basePrice = Math.min(...formData.variations.map(v => v.priceCash || 0));
+    
     const finalData: Mesh = {
         id: formData.id || Math.random().toString(36).substr(2, 9),
         supplierId: formData.supplierId,
         code: formData.code,
         name: formData.name,
+        category: formData.category,
         composition: formData.composition,
         width: formData.width,
         grammage: formData.grammage,
@@ -111,36 +131,37 @@ export function MeshForm({ onSubmit, onCancel, initialData, suppliers = [], pres
         type: 'Malha',
         imageUrl: ''
     };
+
     onSubmit(finalData);
   };
 
-  // Classe utilitária para inputs
-  const inputClass = "w-full border border-gray-300 rounded-lg p-2.5 text-sm focus:ring-1 focus:ring-sow-green focus:border-sow-green outline-none transition-all text-sow-black placeholder-gray-400";
-  const labelClass = "block text-xs font-bold text-sow-dark mb-1.5 uppercase tracking-wide";
+  // Estilos
+  const inputClass = "w-full border border-gray-300 rounded-lg p-2.5 text-sm focus:ring-1 focus:ring-green-500 focus:border-green-500 outline-none transition-all text-black placeholder-gray-400";
+  const labelClass = "block text-xs font-bold text-gray-600 mb-1.5 uppercase tracking-wide";
 
   return (
     <div className="bg-white p-8 rounded-2xl shadow-xl border border-gray-100">
       <div className="flex justify-between items-center mb-8 border-b border-gray-100 pb-4">
-        <h2 className="text-2xl font-bold text-sow-black font-heading flex items-center gap-3">
-          <div className="p-2 bg-sow-black rounded-lg text-white">
-            <Layers size={20} />
-          </div>
+        <h2 className="text-2xl font-bold text-black flex items-center gap-3">
+          <Layers className="text-[#72BF03]" />
           {initialData ? 'Editar Produto' : 'Novo Cadastro'}
         </h2>
-        <button onClick={onCancel} className="text-gray-400 hover:text-sow-black transition-colors">
-            <X size={28} />
+        <button onClick={onCancel} className="text-gray-400 hover:text-red-500 transition-colors">
+            <X size={24} />
         </button>
       </div>
 
       <form onSubmit={handleSubmit} className="space-y-8">
         
-        {/* BLOCO 1 */}
+        {/* BLOCO 1: DADOS TÉCNICOS */}
         <div>
-            <h3 className="text-sm font-bold text-sow-green mb-4 uppercase tracking-widest flex items-center gap-2 border-b border-gray-100 pb-2">
-                <FileText size={16}/> Informações Gerais
+            <h3 className="text-sm font-bold text-[#72BF03] mb-4 uppercase tracking-widest flex items-center gap-2 border-b border-gray-100 pb-2">
+                <FileText size={16}/> Dados Técnicos
             </h3>
             
             <div className="grid grid-cols-1 md:grid-cols-12 gap-5">
+                
+                {/* Fornecedor */}
                 {suppliers.length > 0 && !preselectedSupplierId && (
                 <div className="md:col-span-4">
                     <label className={labelClass}>Fornecedor</label>
@@ -158,7 +179,23 @@ export function MeshForm({ onSubmit, onCancel, initialData, suppliers = [], pres
                 </div>
                 )}
                 
-                <div className="md:col-span-3">
+                {/* Categoria (Correção do Erro 1) */}
+                <div className="md:col-span-4">
+                    <label className={labelClass}>Categoria *</label>
+                    <select 
+                        className={`${inputClass} border-[#72BF03]`}
+                        value={formData.category}
+                        onChange={e => setFormData({...formData, category: e.target.value})}
+                        required
+                    >
+                        <option value="">Selecione...</option>
+                        {PRODUCT_CATEGORIES.map(cat => (
+                            <option key={cat} value={cat}>{cat}</option>
+                        ))}
+                    </select>
+                </div>
+
+                <div className="md:col-span-4">
                     <label className={labelClass}>Código / Ref *</label>
                     <input 
                         className={`${inputClass} font-mono bg-gray-50`}
@@ -169,7 +206,7 @@ export function MeshForm({ onSubmit, onCancel, initialData, suppliers = [], pres
                     />
                 </div>
                 
-                <div className="md:col-span-9">
+                <div className="md:col-span-12">
                     <label className={labelClass}>Nome do Artigo *</label>
                     <input 
                         className={`${inputClass} uppercase`}
@@ -211,41 +248,41 @@ export function MeshForm({ onSubmit, onCancel, initialData, suppliers = [], pres
         {/* BLOCO 2: TABELA DE PREÇOS */}
         <div className="bg-gray-50 p-6 rounded-xl border border-gray-100">
             <div className="flex justify-between items-center mb-4">
-                <h3 className="text-sm font-bold text-sow-green uppercase tracking-widest flex items-center gap-2">
+                <h3 className="text-sm font-bold text-[#72BF03] uppercase tracking-widest flex items-center gap-2">
                     <DollarSign size={16}/> Tabela de Variações
                 </h3>
-                <button type="button" onClick={addVariation} className="text-xs bg-sow-black text-white px-4 py-2 rounded-lg hover:bg-sow-dark flex items-center gap-2 font-bold transition-all">
+                <button type="button" onClick={addVariation} className="text-xs bg-black text-white px-4 py-2 rounded-lg hover:bg-gray-800 flex items-center gap-2 font-bold transition-all">
                     <Plus size={16}/> NOVA COR
                 </button>
             </div>
             
             <div className="space-y-3">
                 {formData.variations.map((v) => (
-                    <div key={v.id} className="flex flex-wrap md:flex-nowrap gap-3 items-end bg-white p-4 rounded-xl border border-gray-200 shadow-sm hover:border-sow-green transition-colors">
+                    <div key={v.id} className="flex flex-wrap md:flex-nowrap gap-3 items-end bg-white p-4 rounded-xl border border-gray-200 shadow-sm hover:border-[#72BF03] transition-colors">
                         <div className="flex-1 min-w-[200px]">
                             <label className="block text-[10px] uppercase font-bold text-gray-400 mb-1">Cor / Variação</label>
                             <input 
-                                className="w-full border-b-2 border-gray-200 p-2 text-sm font-bold text-sow-black uppercase focus:border-sow-green outline-none bg-transparent"
+                                className="w-full border-b-2 border-gray-200 p-2 text-sm font-bold text-black uppercase focus:border-[#72BF03] outline-none bg-transparent"
                                 value={v.name}
                                 onChange={e => updateVariation(v.id, 'name', e.target.value)}
                                 placeholder="Ex: BRANCO"
                             />
                         </div>
                         <div className="w-full md:w-40">
-                            <label className="block text-[10px] uppercase font-bold text-sow-green mb-1">À VISTA (R$)</label>
+                            <label className="block text-[10px] uppercase font-bold text-[#72BF03] mb-1">À VISTA (R$)</label>
                             <input 
                                 type="number" step="0.01"
-                                className="w-full border border-gray-200 rounded-lg p-2 text-sm font-bold text-sow-green bg-green-50/50 focus:ring-1 focus:ring-sow-green outline-none"
+                                className="w-full border border-gray-200 rounded-lg p-2 text-sm font-bold text-[#72BF03] bg-green-50/50 focus:ring-1 focus:ring-[#72BF03] outline-none"
                                 value={v.priceCash || ''}
                                 onChange={e => updateVariation(v.id, 'priceCash', Number(e.target.value))}
                                 placeholder="0.00"
                             />
                         </div>
                         <div className="w-full md:w-40">
-                            <label className="block text-[10px] uppercase font-bold text-sow-dark mb-1">FATURADO (R$)</label>
+                            <label className="block text-[10px] uppercase font-bold text-gray-600 mb-1">FATURADO (R$)</label>
                             <input 
                                 type="number" step="0.01"
-                                className="w-full border border-gray-200 rounded-lg p-2 text-sm font-bold text-sow-dark bg-gray-50 focus:ring-1 focus:ring-gray-400 outline-none"
+                                className="w-full border border-gray-200 rounded-lg p-2 text-sm font-bold text-gray-600 bg-gray-50 focus:ring-1 focus:ring-gray-400 outline-none"
                                 value={v.priceFactored || ''}
                                 onChange={e => updateVariation(v.id, 'priceFactored', Number(e.target.value))}
                                 placeholder="0.00"
@@ -265,10 +302,10 @@ export function MeshForm({ onSubmit, onCancel, initialData, suppliers = [], pres
 
         {/* RODAPÉ */}
         <div className="flex justify-end gap-4 pt-6 border-t border-gray-100">
-          <button type="button" onClick={onCancel} className="px-6 py-3 border border-gray-300 rounded-xl text-sow-dark hover:bg-gray-50 font-bold tracking-wide transition-colors">
+          <button type="button" onClick={onCancel} className="px-6 py-3 border border-gray-300 rounded-xl text-gray-600 hover:bg-gray-50 font-bold tracking-wide transition-colors">
             CANCELAR
           </button>
-          <button type="submit" className="px-8 py-3 bg-sow-green text-white rounded-xl hover:bg-sow-green-hover font-bold tracking-wide shadow-lg shadow-green-100 flex items-center gap-2 transition-all transform hover:-translate-y-0.5">
+          <button type="submit" className="px-8 py-3 bg-[#72BF03] text-white rounded-xl hover:bg-[#5da102] font-bold tracking-wide shadow-lg shadow-green-100 flex items-center gap-2 transition-all transform hover:-translate-y-0.5">
             <Save size={18} /> SALVAR PRODUTO
           </button>
         </div>
