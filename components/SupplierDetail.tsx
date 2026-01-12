@@ -1,118 +1,81 @@
 'use client';
 
 import React from 'react';
-import { Mesh, Supplier } from '@/types';
-import { PlusCircle, UploadCloud, FileJson, RefreshCcw, Layers } from 'lucide-react';
+import { Edit2, Trash2 } from 'lucide-react';
+import { Mesh } from '@/types';
 
-interface SupplierDetailProps {
-  supplier: Supplier;
-  meshes: Mesh[];
-  onEditMesh: (mesh: Mesh) => void;
-  onStartComparison: (mesh: Mesh) => void;
-  onAddNewMesh: () => void;
-  onImportPriceList: () => void;
-  onImportConsolidatedPriceList: () => void;
-  onPriceUpdateImport: () => void;
-  onBatchImport: () => void;
-}
-
-const MeshCard: React.FC<{ mesh: Mesh; onEdit: () => void; onCompare: () => void }> = ({ mesh, onEdit, onCompare }) => {
-  // Acesso direto ao preço pela chave
-  const priceClaras = mesh.prices['Claras'] || mesh.prices['Branco'] || 0;
+// Componente simples para exibir os detalhes (Versão corrigida para o novo Banco de Dados)
+const MeshCard: React.FC<{ mesh: Mesh; onEdit: () => void; onDelete: () => void }> = ({ mesh, onEdit, onDelete }) => {
   
-  // Exibição mais limpa
-  const indications = mesh.complement ? `Complemento: ${mesh.complement}` : '';
+  // Lógica corrigida: Busca o preço na lista de variações
+  const priceBranco = mesh.variations?.find(v => v.name.includes('BRANCO'))?.priceCash || 0;
+  const priceBase = priceBranco > 0 ? priceBranco : (mesh.price || 0);
 
   return (
-    <div className="bg-white border border-gray-200 rounded-lg shadow-sm hover:shadow-lg transition-shadow duration-300 p-4 flex flex-col justify-between">
+    <div className="bg-white p-4 rounded-lg shadow border border-gray-200 flex justify-between items-center">
       <div>
-        <h3 className="text-lg font-bold text-black">{mesh.name}</h3>
-        <p className="text-sm text-gray-500 mb-2">{mesh.code}</p>
-        <p className="text-sm mb-4 text-gray-600 italic">{indications}</p>
-        <div className="grid grid-cols-2 gap-2 text-sm mb-4">
-          <div><span className="font-semibold">Largura:</span> {mesh.width} cm</div>
-          <div><span className="font-semibold">Gramatura:</span> {mesh.grammage} g/m²</div>
-          <div><span className="font-semibold">Rendimento:</span> {mesh.yield} m/kg</div>
-          <div><span className="font-semibold">Composição:</span> {mesh.composition}</div>
+        <h4 className="font-bold text-lg">{mesh.name}</h4>
+        <p className="text-sm text-gray-500">{mesh.code} - {mesh.composition}</p>
+        
+        {/* Exibe o preço base encontrado */}
+        <div className="mt-2 text-sow-green font-bold">
+            A partir de: R$ {priceBase.toFixed(2)}
         </div>
-      </div>
-      <div className="border-t pt-3 mt-auto">
-        <p className="text-lg font-bold text-black mb-3">
-          {priceClaras > 0 ? `R$ ${priceClaras.toFixed(2)}` : 'R$ --'}
-          <span className="text-sm font-normal text-gray-500"> /kg (Base)</span>
-        </p>
-        <div className="flex space-x-2">
-          <button onClick={onEdit} className="w-full bg-gray-200 text-gray-800 hover:bg-gray-300 font-bold py-2 px-4 rounded transition-colors duration-200">Editar</button>
-          <button onClick={onCompare} className="w-full bg-[#72bf03] text-white hover:bg-lime-600 font-bold py-2 px-4 rounded transition-colors duration-200">Comparar</button>
-        </div>
-      </div>
-    </div>
-  );
-};
 
-export const SupplierDetail: React.FC<SupplierDetailProps> = ({ supplier, meshes, onEditMesh, onStartComparison, onAddNewMesh, onImportPriceList, onImportConsolidatedPriceList, onPriceUpdateImport, onBatchImport }) => {
-  return (
-    <div>
-      <div className="flex flex-wrap justify-between items-center mb-6 gap-4">
-        <h1 className="text-3xl font-bold text-black">
-            Malhas de: <span className="text-[#72bf03]">{supplier.name}</span>
-        </h1>
-        <div className="flex gap-2 flex-wrap">
-             <button
-              onClick={onBatchImport}
-              className="flex items-center bg-orange-500 text-white font-bold py-2 px-4 rounded-lg shadow-md hover:bg-orange-600 transition-colors duration-300"
-            >
-              <Layers size={20} className="mr-2" />
-              Importar em Lote (IA)
-            </button>
-             <button
-              onClick={onPriceUpdateImport}
-              className="flex items-center bg-teal-600 text-white font-bold py-2 px-4 rounded-lg shadow-md hover:bg-teal-700 transition-colors duration-300"
-            >
-              <RefreshCcw size={20} className="mr-2" />
-              Atualizar Preços
-            </button>
-             <button 
-              onClick={onImportConsolidatedPriceList}
-              className="flex items-center bg-purple-600 text-white font-bold py-2 px-4 rounded-lg shadow-md hover:bg-purple-700 transition-colors duration-300"
-            >
-              <FileJson size={20} className="mr-2" />
-              Importar Tabela Consolidada
-            </button>
-            <button 
-              onClick={onImportPriceList}
-              className="flex items-center bg-blue-600 text-white font-bold py-2 px-4 rounded-lg shadow-md hover:bg-blue-700 transition-colors duration-300"
-            >
-              <UploadCloud size={20} className="mr-2" />
-              Importar Tabela Simples
-            </button>
-            <button 
-              onClick={onAddNewMesh}
-              className="flex items-center bg-[#72bf03] text-white font-bold py-2 px-4 rounded-lg shadow-md hover:bg-lime-600 transition-colors duration-300"
-            >
-              <PlusCircle size={20} className="mr-2" />
-              Adicionar Malha
-            </button>
+        {/* Lista compacta de variações */}
+        <div className="flex flex-wrap gap-2 mt-2">
+            {mesh.variations?.map((v, i) => (
+                <span key={i} className="text-xs bg-gray-100 px-2 py-1 rounded text-gray-600">
+                    {v.name}: {v.priceCash.toFixed(2)}
+                </span>
+            ))}
         </div>
       </div>
       
-      {meshes.length > 0 ? (
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-          {meshes.map(mesh => (
-            <MeshCard 
-              key={mesh.id} 
-              mesh={mesh} 
-              onEdit={() => onEditMesh(mesh)}
-              onCompare={() => onStartComparison(mesh)}
-            />
-          ))}
-        </div>
-      ) : (
-        <div className="text-center py-16 border-2 border-dashed rounded-lg">
-            <h2 className="text-xl font-semibold text-gray-700">Nenhuma malha cadastrada para este fornecedor</h2>
-            <p className="text-gray-500 mt-2">Clique em &quot;Adicionar Malha&quot; ou &quot;Importar Tabela&quot; para começar.</p>
-        </div>
-      )}
+      <div className="flex gap-2">
+        <button onClick={onEdit} className="p-2 text-blue-600 hover:bg-blue-50 rounded">
+            <Edit2 size={18} />
+        </button>
+        <button onClick={onDelete} className="p-2 text-red-600 hover:bg-red-50 rounded">
+            <Trash2 size={18} />
+        </button>
+      </div>
     </div>
   );
 };
+
+interface SupplierDetailProps {
+  supplier: any;
+  meshes: Mesh[];
+  onEditMesh: (mesh: Mesh) => void;
+  onDeleteMesh: (id: string) => void;
+}
+
+export function SupplierDetail({ supplier, meshes, onEditMesh, onDeleteMesh }: SupplierDetailProps) {
+  return (
+    <div className="space-y-6">
+      <div className="bg-white p-6 rounded-xl shadow-sm border border-gray-100">
+        <h2 className="text-2xl font-bold mb-2">{supplier.name}</h2>
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-4 text-sm text-gray-600">
+            <p>Contato: {supplier.contact}</p>
+            <p>Tel: {supplier.phone}</p>
+            <p>Email: {supplier.email}</p>
+        </div>
+      </div>
+
+      <div className="grid grid-cols-1 gap-4">
+        {meshes.map(mesh => (
+          <MeshCard 
+            key={mesh.id} 
+            mesh={mesh} 
+            onEdit={() => onEditMesh(mesh)}
+            onDelete={() => onDeleteMesh(mesh.id)}
+          />
+        ))}
+        {meshes.length === 0 && (
+            <p className="text-center text-gray-400 py-8">Nenhum produto cadastrado.</p>
+        )}
+      </div>
+    </div>
+  );
+}
