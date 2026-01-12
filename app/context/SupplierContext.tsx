@@ -2,19 +2,14 @@
 
 import React, { createContext, useContext, useState, ReactNode } from 'react';
 import { Supplier, Mesh } from '@/types';
-import { INITIAL_SUPPLIERS, INITIAL_MESHES } from '@/lib/constants';
+import { INITIAL_SUPPLIERS, INITIAL_MESHES, getNextColor } from '@/lib/constants';
 
 interface SupplierContextType {
-  // Dados
   suppliers: Supplier[];
   meshes: Mesh[];
-  
-  // Ações de Produtos (Meshes)
   addMesh: (mesh: Mesh) => void;
   updateMesh: (mesh: Mesh) => void;
   deleteMesh: (id: string) => void;
-
-  // Ações de Fornecedores (CORREÇÃO: Adicionadas aqui)
   addSupplier: (supplier: Supplier) => void;
   updateSupplier: (supplier: Supplier) => void;
   deleteSupplier: (id: string) => void;
@@ -26,22 +21,21 @@ export function SupplierProvider({ children }: { children: ReactNode }) {
   const [suppliers, setSuppliers] = useState<Supplier[]>(INITIAL_SUPPLIERS);
   const [meshes, setMeshes] = useState<Mesh[]>(INITIAL_MESHES);
 
-  // --- Lógica de Produtos ---
-  const addMesh = (mesh: Mesh) => {
-    setMeshes((prev) => [...prev, mesh]);
-  };
+  // --- Produtos ---
+  const addMesh = (mesh: Mesh) => setMeshes((prev) => [...prev, mesh]);
+  const updateMesh = (mesh: Mesh) => setMeshes((prev) => prev.map((m) => (m.id === mesh.id ? mesh : m)));
+  const deleteMesh = (id: string) => setMeshes((prev) => prev.filter((m) => m.id !== id));
 
-  const updateMesh = (mesh: Mesh) => {
-    setMeshes((prev) => prev.map((m) => (m.id === mesh.id ? mesh : m)));
-  };
+  // --- Fornecedores (COM LOGICA DE COR AUTOMÁTICA) ---
+  const addSupplier = (supplierData: Supplier) => {
+    const newIndex = suppliers.length;
+    // Gera nome curto automático se não vier (Pega a primeira palavra)
+    const shortName = supplierData.shortName || supplierData.name.split(' ')[0].toUpperCase().substring(0, 10);
+    // Atribui a próxima cor da lista
+    const color = getNextColor(newIndex);
 
-  const deleteMesh = (id: string) => {
-    setMeshes((prev) => prev.filter((m) => m.id !== id));
-  };
-
-  // --- Lógica de Fornecedores (CORREÇÃO IMPLEMENTADA) ---
-  const addSupplier = (supplier: Supplier) => {
-    setSuppliers((prev) => [...prev, supplier]);
+    const newSupplier = { ...supplierData, shortName, color };
+    setSuppliers((prev) => [...prev, newSupplier]);
   };
 
   const updateSupplier = (supplier: Supplier) => {
@@ -49,21 +43,11 @@ export function SupplierProvider({ children }: { children: ReactNode }) {
   };
 
   const deleteSupplier = (id: string) => {
-    // Opcional: Avisar se tiver produtos vinculados antes de deletar
     setSuppliers((prev) => prev.filter((s) => s.id !== id));
   };
 
   return (
-    <SupplierContext.Provider value={{ 
-      suppliers, 
-      meshes, 
-      addMesh, 
-      updateMesh, 
-      deleteMesh,
-      addSupplier,     // Exportando
-      updateSupplier,  // Exportando
-      deleteSupplier   // Exportando
-    }}>
+    <SupplierContext.Provider value={{ suppliers, meshes, addMesh, updateMesh, deleteMesh, addSupplier, updateSupplier, deleteSupplier }}>
       {children}
     </SupplierContext.Provider>
   );
