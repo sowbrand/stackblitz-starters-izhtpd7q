@@ -4,13 +4,13 @@ import React, { useState } from 'react';
 import Link from 'next/link';
 import { Search, Package, ChevronRight, BarChart3, Layers, Scale } from 'lucide-react';
 import { useSupplierContext } from '@/app/context/SupplierContext';
-import { FabricCard } from '@/components/FabricCard'; // Reutilizando o card para mostrar resultados da busca
+import { FabricCard } from '@/components/FabricCard';
 
 export default function Home() {
   const { suppliers, meshes } = useSupplierContext();
   const [searchTerm, setSearchTerm] = useState('');
 
-  // Mudança 3: A busca agora filtra MALHAS (Produtos), não fornecedores
+  // Busca filtra MALHAS (Produtos), não fornecedores
   const filteredMeshes = meshes.filter(m => 
     m.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
     m.code.toLowerCase().includes(searchTerm.toLowerCase())
@@ -31,7 +31,7 @@ export default function Home() {
             </p>
           </div>
           
-          {/* Mudança 3: Busca de Malha */}
+          {/* Busca de Malha */}
           <div className="relative w-full md:w-96 group">
             <Search className="absolute left-4 top-1/2 transform -translate-y-1/2 text-gray-300 group-focus-within:text-[#72BF03] transition-colors" size={20} />
             <input 
@@ -48,7 +48,7 @@ export default function Home() {
         {!searchTerm && (
           <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-12">
               
-              {/* Mudança 2: Botão para Todos os Produtos */}
+              {/* Botão para Todos os Produtos */}
               <Link href="/products" className="block group">
                 <div className="bg-black text-white p-8 rounded-3xl shadow-xl flex flex-col justify-between h-44 relative overflow-hidden transition-transform transform group-hover:scale-[1.02]">
                     <div className="z-10">
@@ -76,7 +76,7 @@ export default function Home() {
                 </div>
               </Link>
 
-              {/* Mudança 4: Atalho para o Comparador */}
+              {/* Atalho para o Comparador */}
               <Link href="/compare" className="block group">
                 <div className="bg-[#72BF03] text-white p-8 rounded-3xl shadow-xl shadow-green-100 flex flex-col justify-between h-44 relative overflow-hidden transition-transform transform group-hover:scale-[1.02]">
                     <div className="z-10">
@@ -96,7 +96,8 @@ export default function Home() {
         {searchTerm ? (
            <div className="space-y-6">
               <h3 className="text-lg font-bold text-black font-heading">
-                 Resultados para "{searchTerm}"
+                 {/* CORREÇÃO AQUI: Usando &quot; em vez de aspas diretas */}
+                 Resultados para &quot;{searchTerm}&quot;
               </h3>
               <div className="grid grid-cols-1 gap-4">
                  {filteredMeshes.length > 0 ? (
