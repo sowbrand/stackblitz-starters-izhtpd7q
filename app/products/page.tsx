@@ -1,15 +1,19 @@
 'use client';
 
-import React from 'react';
+import React, { useState } from 'react';
 import Link from 'next/link';
 import { ArrowLeft, Tag, Package } from 'lucide-react';
 import { useSupplierContext } from '@/app/context/SupplierContext';
 import { FabricCard } from '@/components/FabricCard';
+import { Modal } from '@/components/ui/Modal'; // Importando o novo modal
 
 export default function AllProductsPage() {
   const { meshes, suppliers } = useSupplierContext();
+  
+  // Estado para controlar o modal
+  const [modalOpen, setModalOpen] = useState(false);
+  const [modalContent, setModalContent] = useState('');
 
-  // Função para identificar a categoria baseada no nome
   const getCategory = (name: string) => {
     const n = name.toLowerCase();
     if (n.includes('suedine')) return 'Suedine';
@@ -21,7 +25,6 @@ export default function AllProductsPage() {
     return 'Outros';
   };
 
-  // Agrupar produtos por categoria
   const groupedMeshes = meshes.reduce((acc, mesh) => {
     const category = getCategory(mesh.name);
     if (!acc[category]) acc[category] = [];
@@ -29,17 +32,20 @@ export default function AllProductsPage() {
     return acc;
   }, {} as Record<string, typeof meshes>);
 
-  // Ordem de exibição das categorias
   const categoryOrder = ['Suedine', 'Cotton', 'Meia Malha', 'Moletom', 'Ribanas e Complementos', 'Piquet', 'Outros'];
-  
-  // Filtra apenas categorias que têm produtos
   const activeCategories = categoryOrder.filter(cat => groupedMeshes[cat] && groupedMeshes[cat].length > 0);
+
+  // Função para abrir o modal com a mensagem correta
+  const handleEditAttempt = (mesh: any) => {
+    const supplierName = suppliers.find(s => s.id === mesh.supplierId)?.name || 'Fornecedor desconhecido';
+    setModalContent(`Para editar o produto <strong>${mesh.name}</strong>, você deve acessar a área de gestão do fornecedor:<br/><br/><span class="text-black font-bold">Fornecedores > ${supplierName}</span>`);
+    setModalOpen(true);
+  };
 
   return (
     <div className="min-h-screen bg-[#FDFDFD] p-6 font-sans">
       <div className="max-w-6xl mx-auto">
         
-        {/* Cabeçalho */}
         <div className="flex items-center gap-6 mb-10">
           <Link href="/" className="p-3 bg-white rounded-full shadow-sm border border-gray-100 hover:border-[#72BF03] transition-all group">
             <ArrowLeft size={20} className="text-[#545454] group-hover:text-[#72BF03]" />
@@ -50,7 +56,6 @@ export default function AllProductsPage() {
           </div>
         </div>
 
-        {/* Lista Categorizada */}
         <div className="space-y-12">
           {activeCategories.map(category => (
             <div key={category} className="animate-in fade-in slide-in-from-bottom-4 duration-500">
@@ -67,12 +72,8 @@ export default function AllProductsPage() {
                   <FabricCard 
                     key={mesh.id} 
                     mesh={mesh}
-                    // Ao clicar em editar, avisa onde encontrar o produto
-                    onEdit={() => {
-                        const supplierName = suppliers.find(s => s.id === mesh.supplierId)?.name;
-                        alert(`Para editar este produto, acesse: Fornecedores > ${supplierName}`);
-                    }} 
-                    onDelete={() => {}} // Desabilitado nesta tela de visualização geral
+                    onEdit={() => handleEditAttempt(mesh)} 
+                    onDelete={() => {}}
                   />
                 ))}
               </div>
@@ -89,8 +90,17 @@ export default function AllProductsPage() {
               </div>
           )}
         </div>
-
       </div>
+
+      {/* Modal de Alerta */}
+      <Modal 
+        isOpen={modalOpen} 
+        onClose={() => setModalOpen(false)} 
+        title="Modo de Visualização"
+      >
+        <p dangerouslySetInnerHTML={{ __html: modalContent }} className="text-sm leading-relaxed" />
+      </Modal>
+
     </div>
   );
 }

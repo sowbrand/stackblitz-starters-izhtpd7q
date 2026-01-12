@@ -2,13 +2,14 @@
 
 import React from 'react';
 import { Mesh } from '@/types';
-import { PackageOpen, Trophy, AlertCircle } from 'lucide-react';
+import { PackageOpen, Trophy } from 'lucide-react';
 
 interface ComparisonViewProps {
   meshes: Mesh[];
+  criteria?: 'costBenefit' | 'pricePerKg' | 'yield' | 'width'; // Novo prop opcional (padrão costBenefit)
 }
 
-export function ComparisonView({ meshes }: ComparisonViewProps) {
+export function ComparisonView({ meshes, criteria = 'costBenefit' }: ComparisonViewProps) {
   if (meshes.length === 0) {
     return (
       <div className="p-12 text-center flex flex-col items-center justify-center">
@@ -21,17 +22,45 @@ export function ComparisonView({ meshes }: ComparisonViewProps) {
     );
   }
 
-  // Lógica para encontrar o melhor custo benefício (Preço Base / Rendimento)
+  // --- LÓGICA DO VENCEDOR DINÂMICA ---
   const calculatedMeshes = meshes.map(mesh => {
-     // Pega o menor preço à vista disponível
+     // Menor preço base (à vista)
      const basePrice = Math.min(...mesh.variations.map(v => v.priceCash).filter(p => p > 0));
-     // Calcula preço por metro linear: Preço Kg / Rendimento
-     const pricePerMeter = mesh.yield > 0 ? basePrice / mesh.yield : 0;
+     
+     // Cálculos
+     const pricePerMeter = mesh.yield > 0 ? basePrice / mesh.yield : 999999;
+     
      return { ...mesh, basePrice, pricePerMeter };
   });
 
-  // Encontra o menor preço por metro (vencedor)
-  const minPricePerMeter = Math.min(...calculatedMeshes.map(m => m.pricePerMeter).filter(p => p > 0));
+  // Determina quem é o "Melhor" baseado no critério escolhido
+  let bestValue: number;
+  let isBest = (mesh: any) => false;
+  let label = "";
+
+  switch (criteria) {
+    case 'pricePerKg':
+        bestValue = Math.min(...calculatedMeshes.map(m => m.basePrice).filter(p => p > 0));
+        isBest = (m) => m.basePrice === bestValue;
+        label = "Menor Preço Kg";
+        break;
+    case 'yield':
+        bestValue = Math.max(...calculatedMeshes.map(m => m.yield));
+        isBest = (m) => m.yield === bestValue;
+        label = "Maior Rendimento";
+        break;
+    case 'width':
+        bestValue = Math.max(...calculatedMeshes.map(m => m.width));
+        isBest = (m) => m.width === bestValue;
+        label = "Maior Largura";
+        break;
+    case 'costBenefit':
+    default:
+        bestValue = Math.min(...calculatedMeshes.map(m => m.pricePerMeter).filter(p => p > 0));
+        isBest = (m) => m.pricePerMeter === bestValue;
+        label = "Melhor Custo/Benefício";
+        break;
+  }
 
   return (
     <div className="overflow-x-auto">
@@ -42,15 +71,15 @@ export function ComparisonView({ meshes }: ComparisonViewProps) {
                 Atributos
             </th>
             {calculatedMeshes.map(mesh => {
-               const isBestOption = mesh.pricePerMeter === minPricePerMeter && minPricePerMeter > 0;
+               const winner = isBest(mesh);
                return (
-                <th key={mesh.id} className={`px-6 py-4 min-w-[220px] align-top relative ${isBestOption ? 'bg-[#72BF03]/5' : ''}`}>
-                    {isBestOption && (
-                        <div className="absolute top-0 left-0 right-0 bg-[#72BF03] text-white text-[10px] font-bold text-center py-1 uppercase tracking-widest flex items-center justify-center gap-1">
-                            <Trophy size={10} /> Melhor Custo/Benefício
+                <th key={mesh.id} className={`px-6 py-4 min-w-[220px] align-top relative ${winner ? 'bg-[#72BF03]/10' : ''}`}>
+                    {winner && (
+                        <div className="absolute top-0 left-0 right-0 bg-[#72BF03] text-white text-[10px] font-bold text-center py-1 uppercase tracking-widest flex items-center justify-center gap-1 shadow-sm">
+                            <Trophy size={10} /> {label}
                         </div>
                     )}
-                    <div className={`flex flex-col gap-1 ${isBestOption ? 'mt-4' : ''}`}>
+                    <div className={`flex flex-col gap-1 ${winner ? 'mt-6' : 'mt-2'}`}>
                         <span className="bg-black text-white text-[10px] px-2 py-0.5 rounded w-fit font-mono mb-1">
                             {mesh.code}
                         </span>
@@ -68,26 +97,33 @@ export function ComparisonView({ meshes }: ComparisonViewProps) {
         </thead>
         <tbody className="divide-y divide-gray-100">
           
-          {/* Métricas Calculadas */}
+          {/* Métricas Calculadas (Destaques) */}
           <tr className="bg-gray-50/50">
             <td className="px-6 py-4 font-bold text-black bg-gray-100/50 sticky left-0 border-r border-gray-100 align-middle">
-                Eficiência (Custo)
+                Análise
             </td>
             {calculatedMeshes.map(mesh => (
-              <td key={mesh.id} className="px-6 py-4">
-                 <div className="flex flex-col gap-1">
-                    <div className="flex justify-between items-center text-xs text-gray-500">
-                        <span>Preço Base (Kg):</span>
-                        <span className="font-medium">R$ {mesh.basePrice.toFixed(2)}</span>
+              <td key={mesh.id} className={`px-6 py-4 ${isBest(mesh) ? 'bg-[#72BF03]/5' : ''}`}>
+                 <div className="flex flex-col gap-2">
+                    {/* Preço Base */}
+                    <div className="flex justify-between items-center text-xs">
+                        <span className="text-gray-500">Preço Kg:</span>
+                        <span className={`font-bold ${criteria === 'pricePerKg' && isBest(mesh) ? 'text-[#72BF03]' : 'text-black'}`}>
+                           R$ {mesh.basePrice.toFixed(2)}
+                        </span>
                     </div>
-                    <div className="flex justify-between items-center text-xs text-gray-500">
-                        <span>Rendimento:</span>
-                        <span className="font-medium">{mesh.yield} m/kg</span>
+                    {/* Rendimento */}
+                    <div className="flex justify-between items-center text-xs">
+                        <span className="text-gray-500">Rendimento:</span>
+                        <span className={`font-bold ${criteria === 'yield' && isBest(mesh) ? 'text-[#72BF03]' : 'text-black'}`}>
+                           {mesh.yield} m/kg
+                        </span>
                     </div>
-                    <div className="border-t border-gray-200 mt-2 pt-2 flex justify-between items-center">
-                        <span className="font-bold text-[#545454] uppercase text-xs">Custo Metro:</span>
-                        <span className={`font-bold text-lg ${mesh.pricePerMeter === minPricePerMeter ? 'text-[#72BF03]' : 'text-black'}`}>
-                            R$ {mesh.pricePerMeter.toFixed(2)}
+                    {/* Custo Metro */}
+                    <div className="border-t border-gray-200 pt-2 flex justify-between items-center">
+                        <span className="font-bold text-[#545454] uppercase text-[10px]">Custo Metro:</span>
+                        <span className={`font-bold text-lg ${criteria === 'costBenefit' && isBest(mesh) ? 'text-[#72BF03]' : 'text-gray-700'}`}>
+                            R$ {mesh.pricePerMeter < 9999 ? mesh.pricePerMeter.toFixed(2) : '-'}
                         </span>
                     </div>
                  </div>
@@ -98,7 +134,11 @@ export function ComparisonView({ meshes }: ComparisonViewProps) {
           {/* Dados Físicos */}
           <tr className="hover:bg-gray-50/50 transition-colors">
             <td className="px-6 py-4 font-bold text-[#545454] bg-white sticky left-0 border-r border-gray-100">Largura</td>
-            {meshes.map(mesh => <td key={mesh.id} className="px-6 py-4 text-[#545454]">{mesh.width} m</td>)}
+            {meshes.map(mesh => (
+                <td key={mesh.id} className={`px-6 py-4 ${criteria === 'width' && isBest(mesh) ? 'text-[#72BF03] font-bold' : 'text-[#545454]'}`}>
+                    {mesh.width} m
+                </td>
+            ))}
           </tr>
           <tr className="hover:bg-gray-50/50 transition-colors">
             <td className="px-6 py-4 font-bold text-[#545454] bg-white sticky left-0 border-r border-gray-100">Gramatura</td>
