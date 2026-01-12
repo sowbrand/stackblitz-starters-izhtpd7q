@@ -1,4 +1,3 @@
-
 import type { Config } from "tailwindcss";
 
 const config: Config = {
@@ -10,11 +9,19 @@ const config: Config = {
   theme: {
     extend: {
       colors: {
-        'brand-green': '#72bf03',
-        'brand-dark': '#545454',
+        sow: {
+          black: '#000000',
+          dark: '#545454',
+          light: '#FFFFFF',
+          green: '#72BF03',       // Cor da marca
+          'green-hover': '#5da102', // Um pouco mais escuro para o hover
+          'gray-light': '#F5F5F5', // Fundo sutil
+        }
       },
       fontFamily: {
-        montserrat: ['Montserrat', 'sans-serif'],
+        // Montserrat para o corpo, Helvetica para títulos (conforme manual)
+        sans: ['var(--font-montserrat)', 'Helvetica', 'Arial', 'sans-serif'],
+        heading: ['Helvetica', 'Arial', 'sans-serif'],
       },
     },
   },

@@ -1,97 +1,107 @@
 'use client';
 
-import React from 'react';
+import React, { useState } from 'react';
 import Link from 'next/link';
-// Caminho relativo para garantir funcionamento
-import { useSupplierContext } from './context/SupplierContext';
-import { ChevronRight, Package, Settings, Users, CheckCircle2 } from 'lucide-react';
+import { Search, Package, ChevronRight, BarChart3, Layers } from 'lucide-react';
+import { useSupplierContext } from '@/app/context/SupplierContext';
 
 export default function Home() {
   const { suppliers, meshes } = useSupplierContext();
+  const [searchTerm, setSearchTerm] = useState('');
 
-  const getMeshCount = (supplierId: string) => {
-    return meshes.filter(m => String(m.supplierId) === String(supplierId)).length;
-  };
+  const filteredSuppliers = suppliers.filter(s => 
+    s.name.toLowerCase().includes(searchTerm.toLowerCase())
+  );
 
   return (
-    <main className="min-h-screen bg-gray-50 p-6">
-      <div className="max-w-6xl mx-auto">
-        {/* Cabeçalho */}
-        <div className="flex flex-col md:flex-row justify-between items-center mb-8 gap-4">
+    <div className="min-h-screen bg-[#FDFDFD] p-8 font-sans">
+      <div className="max-w-5xl mx-auto">
+        
+        {/* LOGO E CABEÇALHO */}
+        <div className="flex flex-col md:flex-row justify-between items-center mb-16 gap-6">
           <div>
-            <h1 className="text-3xl font-bold text-gray-900 flex items-center gap-2">
-              <Users className="text-blue-600" />
-              Fornecedores
+            {/* Logo Estilo Sowbrand (Helvetica/Montserrat) */}
+            <h1 className="text-4xl tracking-tighter text-black">
+              <span className="font-light">sow</span><span className="font-bold">brand</span>
             </h1>
-            <p className="text-gray-500 mt-2">Gerencie seus parceiros e importações.</p>
+            <p className="text-[10px] text-[#545454] uppercase tracking-[0.2em] mt-1 font-medium">
+              Intelligence System
+            </p>
           </div>
           
-          <Link 
-            href="/manage" 
-            className="flex items-center gap-2 text-gray-700 bg-white border border-gray-300 px-4 py-2 rounded-lg hover:bg-gray-50 hover:text-blue-600 font-medium transition-colors shadow-sm"
-          >
-            <Settings size={18} />
-            Gerenciar Lista
-          </Link>
+          {/* Barra de Busca Clean */}
+          <div className="relative w-full md:w-96 group">
+            <Search className="absolute left-4 top-1/2 transform -translate-y-1/2 text-gray-300 group-focus-within:text-[#72BF03] transition-colors" size={20} />
+            <input 
+              type="text" 
+              placeholder="Buscar fornecedor..." 
+              className="w-full pl-12 pr-6 py-3 bg-white border border-gray-100 rounded-full shadow-sm focus:ring-1 focus:ring-[#72BF03] focus:border-[#72BF03] outline-none transition-all placeholder-gray-300 text-[#545454]"
+              value={searchTerm}
+              onChange={(e) => setSearchTerm(e.target.value)}
+            />
+          </div>
         </div>
 
-        {/* Grid */}
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-          {suppliers.map((supplier) => (
-            <Link 
-              key={supplier.id} 
-              href={`/suppliers/${supplier.id}`}
-              className="group block h-full"
-            >
-              <div className="bg-white rounded-xl p-6 shadow-sm border border-gray-200 hover:border-blue-500 hover:shadow-md transition-all h-full flex flex-col justify-between cursor-pointer relative overflow-hidden">
-                <div className="absolute top-0 left-0 w-1 h-full bg-blue-500 transform -translate-x-1 transition-transform group-hover:translate-x-0"></div>
+        {/* DASHBOARD CARDS */}
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-12">
+            {/* Card Preto */}
+            <div className="bg-black text-white p-8 rounded-3xl shadow-2xl flex flex-col justify-between h-40 relative overflow-hidden group hover:scale-[1.01] transition-transform">
+                <div className="z-10">
+                    <h2 className="text-5xl font-bold mb-1">{meshes.length}</h2>
+                    <p className="text-xs text-gray-400 uppercase tracking-widest font-semibold">Produtos Cadastrados</p>
+                </div>
+                <Layers className="absolute right-[-20px] bottom-[-20px] text-gray-800 w-32 h-32 opacity-20 group-hover:opacity-30 transition-opacity" />
+            </div>
+            
+            {/* Card Verde Sowbrand */}
+            <div className="bg-[#72BF03] text-white p-8 rounded-3xl shadow-xl shadow-green-100 flex flex-col justify-between h-40 relative overflow-hidden group hover:scale-[1.01] transition-transform">
+                <div className="z-10">
+                    <h2 className="text-5xl font-bold mb-1">{suppliers.length}</h2>
+                    <p className="text-xs text-green-50 uppercase tracking-widest font-semibold">Fornecedores Ativos</p>
+                </div>
+                <BarChart3 className="absolute right-[-20px] bottom-[-20px] text-white w-32 h-32 opacity-20 group-hover:opacity-30 transition-opacity" />
+            </div>
+        </div>
 
-                <div>
-                  <div className="flex justify-between items-start mb-4">
-                    <div className="h-12 w-12 bg-blue-50 text-blue-600 rounded-lg flex items-center justify-center font-bold text-xl group-hover:bg-blue-600 group-hover:text-white transition-colors">
-                      {supplier.name.substring(0, 2).toUpperCase()}
+        {/* LISTA DE FORNECEDORES */}
+        <div className="space-y-4">
+          <h3 className="text-sm font-bold text-black uppercase tracking-widest mb-6 border-b border-gray-100 pb-2">
+            Meus Fornecedores
+          </h3>
+          
+          <div className="grid grid-cols-1 gap-4">
+            {filteredSuppliers.map((supplier) => {
+              const count = meshes.filter(m => m.supplierId === supplier.id).length;
+              
+              return (
+                <Link key={supplier.id} href={`/suppliers/${supplier.id}`} className="block group">
+                  <div className="bg-white p-6 rounded-2xl border border-gray-100 shadow-sm hover:shadow-md hover:border-[#72BF03] transition-all duration-300 flex justify-between items-center">
+                    <div className="flex items-center gap-5">
+                      {/* Avatar com a Inicial */}
+                      <div className="w-14 h-14 bg-[#F5F5F5] rounded-full flex items-center justify-center text-black font-bold text-xl group-hover:bg-[#72BF03] group-hover:text-white transition-colors duration-300">
+                        {supplier.name.charAt(0)}
+                      </div>
+                      <div>
+                        <h2 className="text-xl font-bold text-[#545454] group-hover:text-black transition-colors">
+                            {supplier.name}
+                        </h2>
+                        <p className="text-sm text-gray-400 mt-0.5">
+                          {count} {count === 1 ? 'produto' : 'produtos'}
+                        </p>
+                      </div>
                     </div>
-                    <ChevronRight className="text-gray-300 group-hover:text-blue-500 transition-colors" />
+                    
+                    <div className="w-10 h-10 rounded-full bg-white border border-gray-100 flex items-center justify-center text-gray-300 group-hover:border-[#72BF03] group-hover:text-[#72BF03] transition-all">
+                      <ChevronRight size={20} />
+                    </div>
                   </div>
-                  
-                  <h3 className="text-xl font-bold text-gray-900 mb-1 group-hover:text-blue-700 transition-colors">
-                    {supplier.name}
-                  </h3>
-                  <div className="text-sm text-gray-500 mb-4">
-                    {supplier.email || '• Clique para acessar uploads'}
-                  </div>
-                </div>
-
-                <div className="pt-4 border-t border-gray-50 flex items-center gap-2 text-sm text-gray-600">
-                  <Package size={16} className="text-gray-400" />
-                  <span className="font-bold text-gray-900">{getMeshCount(supplier.id)}</span> 
-                  <span className="text-gray-500">produtos</span>
-                </div>
-              </div>
-            </Link>
-          ))}
-
-          {/* Card Novo */}
-          <Link 
-            href="/manage"
-            className="group block border-2 border-dashed border-gray-300 rounded-xl p-6 flex flex-col items-center justify-center text-center hover:border-blue-400 hover:bg-blue-50 transition-all min-h-[200px]"
-          >
-            <div className="h-12 w-12 bg-gray-100 text-gray-500 rounded-full flex items-center justify-center mb-3 group-hover:scale-110 group-hover:bg-blue-100 group-hover:text-blue-600 transition-all">
-              <Settings size={24} />
-            </div>
-            <h3 className="text-lg font-semibold text-gray-900">Novo Fornecedor</h3>
-          </Link>
-        </div>
-
-        {/* RODAPÉ: Isso fará o Commit aparecer */}
-        <div className="mt-12 pt-6 border-t border-gray-200 text-center">
-            <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-green-50 text-green-700 text-xs font-medium">
-                <CheckCircle2 size={12} />
-                Sistema Pronto • API Configurada
-            </div>
+                </Link>
+              );
+            })}
+          </div>
         </div>
 
       </div>
-    </main>
+    </div>
   );
 }

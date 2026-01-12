@@ -1,168 +1,121 @@
 'use client';
 
-import React, { useState, useMemo } from 'react';
-import { Supplier, Mesh } from '@/types';
-import { SupplierDetail } from '@/components/SupplierDetail';
+import React, { useState } from 'react';
+import { Plus, Search, ArrowLeft, Package } from 'lucide-react';
+import Link from 'next/link';
 import { MeshForm } from '@/components/MeshForm';
-import { ComparisonView } from '@/components/ComparisonView';
-import { BatchImporter } from '@/components/BatchImporter';
-import { PriceListImporter } from '@/components/PriceListImporter';
-import { ConsolidatedPriceImporter } from '@/components/ConsolidatedPriceImporter';
-import { PriceUpdateImporter } from '@/components/PriceUpdateImporter';
-import { INITIAL_SUPPLIERS, INITIAL_MESHES } from '@/lib/constants';
+import { FabricCard } from '@/components/FabricCard';
+import { useSupplierContext } from '@/app/context/SupplierContext'; // Usando o contexto global
 
-export default function SupplierPage({ params }: { params: { id: string } }) {
-  // Garante que o ID da URL é string
-  const supplierId = String(params.id);
-
-  // Usa as constantes globais como estado inicial
-  const [suppliers] = useState<Supplier[]>(INITIAL_SUPPLIERS);
-  const [meshes, setMeshes] = useState<Mesh[]>(INITIAL_MESHES);
-
-  // Modais
-  const [isEditingMesh, setIsEditingMesh] = useState<Mesh | null>(null);
+export default function SupplierDetailsPage({ params }: { params: { id: string } }) {
+  // Agora pegamos os dados e funções do Contexto Global
+  const { suppliers, meshes, addMesh, updateMesh, deleteMesh } = useSupplierContext();
+  
   const [isAddingMesh, setIsAddingMesh] = useState(false);
-  const [isComparing, setIsComparing] = useState<Mesh | null>(null);
-  const [showPriceListImporter, setShowPriceListImporter] = useState(false);
-  const [showConsolidatedImporter, setShowConsolidatedImporter] = useState(false);
-  const [showPriceUpdateImporter, setShowPriceUpdateImporter] = useState(false);
-  const [showBatchImporter, setShowBatchImporter] = useState(false);
+  const [editingMesh, setEditingMesh] = useState<any | null>(null);
+  const [searchTerm, setSearchTerm] = useState('');
 
-  // Busca o fornecedor na lista oficial
-  const supplier = useMemo(() => {
-    return suppliers.find(s => String(s.id) === supplierId);
-  }, [suppliers, supplierId]);
+  const supplier = suppliers.find(s => s.id === params.id);
 
-  const supplierMeshes = useMemo(() => {
-    return meshes.filter(m => String(m.supplierId) === supplierId);
-  }, [meshes, supplierId]);
+  if (!supplier) return <div className="p-20 text-center text-sow-dark">Fornecedor não encontrado</div>;
 
-  if (!supplier) {
-    return (
-        <div className="flex flex-col items-center justify-center min-h-screen text-gray-500">
-            <h1 className="text-2xl font-bold mb-2">Fornecedor não encontrado</h1>
-            <p>ID Procurado: {supplierId}</p>
-            <div className="mt-4 p-4 bg-gray-100 rounded text-left text-sm">
-                <p className="font-bold">IDs disponíveis:</p>
-                <ul>
-                    {suppliers.map(s => <li key={s.id}>{s.id} - {s.name}</li>)}
-                </ul>
-            </div>
-            <a href="/" className="mt-6 px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700">Voltar para o início</a>
-        </div>
-    );
-  }
+  // Filtra as malhas usando o estado global
+  const supplierMeshes = meshes.filter(m => 
+    m.supplierId === supplier.id && 
+    (m.name.toLowerCase().includes(searchTerm.toLowerCase()) || m.code.includes(searchTerm))
+  );
 
-  const handleSaveMesh = (mesh: Mesh) => {
-    if (isEditingMesh) {
-      setMeshes(prev => prev.map(m => m.id === mesh.id ? mesh : m));
+  const handleSaveMesh = (meshData: any) => {
+    if (editingMesh) {
+      updateMesh(meshData);
     } else {
-      setMeshes(prev => [...prev, mesh]);
+      addMesh(meshData);
     }
-    setIsEditingMesh(null);
     setIsAddingMesh(false);
+    setEditingMesh(null);
   };
 
-  const handleImportMeshes = (newMeshes: Mesh[]) => {
-    setMeshes(prev => [...prev, ...newMeshes]);
-    setShowPriceListImporter(false);
-    setShowBatchImporter(false);
+  const handleDeleteMesh = (id: string) => {
+    if (confirm('Tem certeza que deseja excluir este produto?')) {
+      deleteMesh(id);
+    }
   };
 
   return (
-    <div className="min-h-screen bg-gray-50 p-6">
-      {!isComparing && !isEditingMesh && !isAddingMesh && 
-       !showPriceListImporter && !showConsolidatedImporter && 
-       !showPriceUpdateImporter && !showBatchImporter && (
-        <SupplierDetail 
-          supplier={supplier}
-          meshes={supplierMeshes}
-          onEditMesh={setIsEditingMesh}
-          onStartComparison={setIsComparing}
-          onAddNewMesh={() => setIsAddingMesh(true)}
-          onImportPriceList={() => setShowPriceListImporter(true)}
-          onImportConsolidatedPriceList={() => setShowConsolidatedImporter(true)}
-          onPriceUpdateImport={() => setShowPriceUpdateImporter(true)}
-          onBatchImport={() => setShowBatchImporter(true)}
-        />
-      )}
+    <div className="min-h-screen bg-[#FDFDFD] p-6 font-sans">
+      <div className="max-w-6xl mx-auto">
+        
+        {/* CABEÇALHO */}
+        <div className="flex items-center gap-6 mb-10">
+          <Link href="/" className="p-3 bg-white rounded-full shadow-sm border border-gray-100 hover:border-sow-green transition-all group">
+            <ArrowLeft size={20} className="text-sow-dark group-hover:text-sow-green" />
+          </Link>
+          <div>
+            <h1 className="text-3xl font-bold text-sow-black font-heading tracking-tight">{supplier.name}</h1>
+            <p className="text-sow-dark opacity-60 font-medium">Gestão de Produtos e Preços</p>
+          </div>
+        </div>
 
-      {(isAddingMesh || isEditingMesh) && (
-        <MeshForm 
-          onSubmit={handleSaveMesh}
-          suppliers={suppliers}
-          initialData={isEditingMesh}
-          preselectedSupplierId={supplier.id}
-          onCancel={() => { setIsAddingMesh(false); setIsEditingMesh(null); }}
-        />
-      )}
+        {/* BARRA DE FERRAMENTAS */}
+        {!isAddingMesh && !editingMesh && (
+          <div className="bg-white p-5 rounded-2xl shadow-sm border border-gray-100 mb-8 flex justify-between items-center flex-wrap gap-4">
+            <div className="relative w-full md:w-[400px]">
+              <Search className="absolute left-4 top-1/2 transform -translate-y-1/2 text-gray-400" size={20} />
+              <input 
+                type="text" 
+                placeholder="Buscar por nome ou código..." 
+                className="w-full pl-12 pr-4 py-3 border border-gray-200 rounded-xl focus:ring-2 focus:ring-sow-green focus:border-transparent outline-none text-sm transition-all placeholder-gray-300 text-sow-dark"
+                value={searchTerm}
+                onChange={e => setSearchTerm(e.target.value)}
+              />
+            </div>
+            
+            <button 
+              onClick={() => setIsAddingMesh(true)}
+              className="px-6 py-3 bg-sow-green text-white rounded-xl hover:bg-sow-green-hover flex items-center gap-2 font-bold shadow-lg shadow-green-100 transition-all transform hover:-translate-y-0.5"
+            >
+              <Plus size={20} /> Novo Produto
+            </button>
+          </div>
+        )}
 
-      {isComparing && (
-        <div className="relative">
-            <button onClick={() => setIsComparing(null)} className="mb-4 text-blue-600 hover:underline">← Voltar</button>
-            <ComparisonView 
-                allMeshes={meshes}
-                initialMeshes={[isComparing]}
-                suppliers={suppliers}
+        {/* FORMULÁRIO */}
+        {(isAddingMesh || editingMesh) && (
+          <div className="mb-10">
+            <MeshForm 
+              onSubmit={handleSaveMesh}
+              onCancel={() => { setIsAddingMesh(false); setEditingMesh(null); }}
+              initialData={editingMesh}
+              preselectedSupplierId={supplier.id}
+              suppliers={[supplier]}
             />
-        </div>
-      )}
+          </div>
+        )}
 
-      {showBatchImporter && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
-            <div className="w-full max-w-4xl">
-                <BatchImporter 
-                    supplier={supplier}
-                    existingMeshes={meshes}
-                    onImport={handleImportMeshes}
-                    onCancel={() => setShowBatchImporter(false)}
-                />
-            </div>
-        </div>
-      )}
-
-      {showConsolidatedImporter && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50 overflow-y-auto">
-            <div className="w-full max-w-6xl my-8">
-                <div className="bg-white rounded-lg shadow-xl overflow-hidden">
-                    <ConsolidatedPriceImporter 
-                        supplier={supplier}
-                        allMeshes={meshes}
-                        setMeshes={setMeshes}
-                        onClose={() => setShowConsolidatedImporter(false)}
-                    />
+        {/* LISTA DE PRODUTOS */}
+        {!isAddingMesh && !editingMesh && (
+          <div className="grid grid-cols-1 gap-6">
+            {supplierMeshes.length === 0 ? (
+              <div className="text-center py-20 bg-white rounded-2xl border border-dashed border-gray-200">
+                <div className="bg-gray-50 p-4 rounded-full inline-block mb-4">
+                    <Package className="h-10 w-10 text-gray-300" />
                 </div>
-            </div>
-        </div>
-      )}
-
-      {showPriceUpdateImporter && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50 overflow-y-auto">
-            <div className="w-full max-w-6xl my-8">
-                <div className="bg-white rounded-lg shadow-xl overflow-hidden">
-                    <PriceUpdateImporter 
-                        supplier={supplier}
-                        allMeshes={meshes}
-                        setMeshes={setMeshes}
-                        onClose={() => setShowPriceUpdateImporter(false)}
-                    />
-                </div>
-            </div>
-        </div>
-      )}
-
-      {showPriceListImporter && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
-            <div className="w-full max-w-2xl">
-                <PriceListImporter 
-                    supplier={supplier}
-                    existingMeshes={meshes}
-                    onImport={handleImportMeshes}
-                    onCancel={() => setShowPriceListImporter(false)}
+                <p className="text-sow-dark font-semibold text-lg">Nenhum produto cadastrado</p>
+                <p className="text-gray-400 mt-1">Utilize o botão acima para adicionar.</p>
+              </div>
+            ) : (
+              supplierMeshes.map(mesh => (
+                <FabricCard 
+                  key={mesh.id}
+                  mesh={mesh}
+                  onEdit={setEditingMesh}
+                  onDelete={handleDeleteMesh}
                 />
-            </div>
-        </div>
-      )}
+              ))
+            )}
+          </div>
+        )}
+      </div>
     </div>
   );
 }

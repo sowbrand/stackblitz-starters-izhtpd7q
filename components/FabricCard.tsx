@@ -1,82 +1,106 @@
 'use client';
 
 import React from 'react';
-// CORREÇÃO: Importamos 'Mesh' em vez de 'Fabric'
-import { Mesh, ColorCategory } from '@/types/index';
-// Mantive os imports utilitários caso você os tenha, se der erro neles, remova.
-import { Star, Edit, BarChart2 } from 'lucide-react';
+import { Edit2, Trash2 } from 'lucide-react';
+import { Mesh } from '@/types';
 
 interface FabricCardProps {
-  // CORREÇÃO: Tipo atualizado para Mesh
-  fabric: Mesh;
-  onEdit?: (fabric: Mesh) => void;
-  onCompare?: (fabric: Mesh) => void;
+  mesh: Mesh;
+  onEdit: (mesh: Mesh) => void;
+  onDelete: (id: string) => void;
 }
 
-export const FabricCard: React.FC<FabricCardProps> = ({ fabric, onEdit, onCompare }) => {
-  
-  // CORREÇÃO: Acesso ao preço adaptado para o novo formato Record<string, number>
-  // Tenta pegar 'Claras', se não existir pega 'Branco', se não pega o primeiro valor, ou 0.
-  const price = fabric.prices['Claras'] || 
-                fabric.prices['Branco'] || 
-                (Object.values(fabric.prices).length > 0 ? Object.values(fabric.prices)[0] : 0);
-
+export function FabricCard({ mesh, onEdit, onDelete }: FabricCardProps) {
   return (
-    <div className="bg-white rounded-xl border border-gray-200 shadow-sm hover:shadow-md transition-all duration-200 p-5 flex flex-col h-full">
-      <div className="flex justify-between items-start mb-3">
+    <div className="bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden hover:shadow-md transition-all duration-300 group">
+      
+      {/* Cabeçalho do Card */}
+      <div className="p-5 border-b border-gray-100 flex justify-between items-start bg-white">
         <div>
-          <h3 className="font-bold text-lg text-gray-900 line-clamp-1" title={fabric.name}>
-            {fabric.name}
-          </h3>
-          <p className="text-sm text-gray-500 font-mono">{fabric.code}</p>
+          <div className="flex items-center gap-3 mb-1">
+            <span className="bg-sow-black text-white px-2 py-1 rounded text-xs font-bold font-heading tracking-wider">
+              {mesh.code}
+            </span>
+            <h3 className="font-bold text-lg text-sow-black font-heading tracking-tight">{mesh.name}</h3>
+          </div>
+          <p className="text-xs text-sow-dark font-medium uppercase tracking-wide mt-1 opacity-80">{mesh.composition}</p>
         </div>
-        {/* Exibição do Preço */}
-        <div className="bg-green-50 text-green-700 px-2.5 py-1 rounded-md font-bold text-sm border border-green-100">
-          R$ {price.toFixed(2)}
+        <div className="flex gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
+          <button 
+            onClick={() => onEdit(mesh)}
+            className="p-2 text-sow-dark hover:text-sow-green hover:bg-gray-50 rounded-full transition-colors"
+            title="Editar"
+          >
+            <Edit2 size={18} />
+          </button>
+          <button 
+            onClick={() => onDelete(mesh.id)}
+            className="p-2 text-sow-dark hover:text-red-500 hover:bg-red-50 rounded-full transition-colors"
+            title="Excluir"
+          >
+            <Trash2 size={18} />
+          </button>
         </div>
       </div>
 
-      {/* Detalhes Técnicos */}
-      <div className="grid grid-cols-2 gap-y-2 gap-x-4 text-sm text-gray-600 mb-4 flex-grow">
+      {/* Detalhes Técnicos - Layout Limpo */}
+      <div className="px-5 py-4 grid grid-cols-2 md:grid-cols-4 gap-4 text-sm bg-gray-50/50">
         <div className="flex flex-col">
-          <span className="text-xs text-gray-400 uppercase font-semibold">Largura</span>
-          <span>{fabric.width} cm</span>
+            <span className="text-[10px] text-sow-dark uppercase font-bold tracking-wider opacity-60">Largura</span>
+            <span className="font-semibold text-sow-black">{mesh.width > 0 ? `${mesh.width} m` : '-'}</span>
         </div>
         <div className="flex flex-col">
-          <span className="text-xs text-gray-400 uppercase font-semibold">Gramatura</span>
-          <span>{fabric.grammage} g/m²</span>
+            <span className="text-[10px] text-sow-dark uppercase font-bold tracking-wider opacity-60">Gramatura</span>
+            <span className="font-semibold text-sow-black">{mesh.grammage > 0 ? `${mesh.grammage} g/m²` : '-'}</span>
         </div>
         <div className="flex flex-col">
-          <span className="text-xs text-gray-400 uppercase font-semibold">Rendimento</span>
-          <span>{fabric.yield} m/kg</span>
+            <span className="text-[10px] text-sow-dark uppercase font-bold tracking-wider opacity-60">Rendimento</span>
+            <span className="font-semibold text-sow-black">{mesh.yield > 0 ? `${mesh.yield} m/kg` : '-'}</span>
         </div>
         <div className="flex flex-col">
-          <span className="text-xs text-gray-400 uppercase font-semibold">Composição</span>
-          <span className="truncate" title={fabric.composition}>{fabric.composition}</span>
+            <span className="text-[10px] text-sow-dark uppercase font-bold tracking-wider opacity-60">NCM</span>
+            <span className="font-semibold text-sow-black">{mesh.ncm || '-'}</span>
         </div>
       </div>
 
-      {/* Botões de Ação */}
-      <div className="grid grid-cols-2 gap-3 mt-auto pt-4 border-t border-gray-100">
-        {onEdit && (
-          <button 
-            onClick={() => onEdit(fabric)}
-            className="flex items-center justify-center gap-2 px-3 py-2 text-sm font-medium text-gray-700 bg-gray-50 hover:bg-gray-100 rounded-lg transition-colors"
-          >
-            <Edit size={16} />
-            Editar
-          </button>
-        )}
-        {onCompare && (
-          <button 
-            onClick={() => onCompare(fabric)}
-            className="flex items-center justify-center gap-2 px-3 py-2 text-sm font-medium text-white bg-[#72bf03] hover:bg-lime-600 rounded-lg transition-colors shadow-sm"
-          >
-            <BarChart2 size={16} />
-            Comparar
-          </button>
+      {/* Lista de Variações de Preço - Destaque no Verde */}
+      <div className="p-5 bg-white">
+        <span className="block text-[10px] text-sow-dark uppercase font-bold mb-3 tracking-wider opacity-60">
+            Tabela de Preços
+        </span>
+        <div className="flex flex-wrap gap-3">
+          {mesh.variations && mesh.variations.length > 0 ? (
+            mesh.variations.map((v, idx) => (
+              <div key={idx} className="flex flex-col bg-white border border-gray-200 rounded-lg px-3 py-2 min-w-[130px] hover:border-sow-green transition-colors">
+                <span className="text-[10px] font-bold text-sow-black uppercase mb-1">{v.name || 'ÚNICA'}</span>
+                <div className="flex flex-col gap-0.5">
+                    <div className="flex justify-between items-end">
+                        <span className="text-[10px] text-gray-400 mb-0.5">À vista</span>
+                        <span className="text-sow-green font-bold text-base">
+                            R$ {Number(v.priceCash).toFixed(2)}
+                        </span>
+                    </div>
+                    {v.priceFactored > 0 && (
+                        <div className="flex justify-between items-center text-xs pt-1 border-t border-gray-100 mt-1">
+                            <span className="text-[10px] text-gray-400">Fat.</span>
+                            <span className="text-sow-dark font-medium">
+                                R$ {Number(v.priceFactored).toFixed(2)}
+                            </span>
+                        </div>
+                    )}
+                </div>
+              </div>
+            ))
+          ) : (
+            <span className="text-sm text-gray-400 italic">Sem preços cadastrados</span>
+          )}
+        </div>
+        {mesh.complement && (
+            <div className="mt-4 text-xs text-sow-dark bg-gray-50 p-3 rounded-lg border border-gray-100 italic">
+                <strong className="text-sow-black not-italic">Nota:</strong> {mesh.complement}
+            </div>
         )}
       </div>
     </div>
   );
-};
+}

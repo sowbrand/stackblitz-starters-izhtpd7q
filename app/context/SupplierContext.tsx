@@ -1,58 +1,48 @@
 'use client';
 
 import React, { createContext, useContext, useState, ReactNode } from 'react';
-// Caminhos relativos (saindo de app/context -> app -> raiz -> types/lib)
-import { Supplier, Mesh } from '../../types';
-import { INITIAL_SUPPLIERS, INITIAL_MESHES } from '../../lib/constants';
+import { Supplier, Mesh } from '@/types';
+import { INITIAL_SUPPLIERS, INITIAL_MESHES } from '@/lib/constants';
 
+// Definição do que o contexto carrega
 interface SupplierContextType {
   suppliers: Supplier[];
   meshes: Mesh[];
-  addSupplier: (supplier: Supplier) => void;
-  updateSupplier: (id: string, data: Partial<Supplier>) => void;
-  deleteSupplier: (id: string) => void;
   addMesh: (mesh: Mesh) => void;
   updateMesh: (mesh: Mesh) => void;
-  setMeshes: React.Dispatch<React.SetStateAction<Mesh[]>>;
+  deleteMesh: (id: string) => void;
 }
 
 const SupplierContext = createContext<SupplierContextType | undefined>(undefined);
 
 export function SupplierProvider({ children }: { children: ReactNode }) {
-  const [suppliers, setSuppliers] = useState<Supplier[]>(INITIAL_SUPPLIERS);
+  // Dados iniciais
+  const [suppliers] = useState<Supplier[]>(INITIAL_SUPPLIERS);
   const [meshes, setMeshes] = useState<Mesh[]>(INITIAL_MESHES);
 
-  const addSupplier = (supplier: Supplier) => {
-    setSuppliers(prev => [...prev, supplier]);
-  };
-
-  const updateSupplier = (id: string, data: Partial<Supplier>) => {
-    setSuppliers(prev => prev.map(s => s.id === id ? { ...s, ...data } : s));
-  };
-
-  const deleteSupplier = (id: string) => {
-    setSuppliers(prev => prev.filter(s => s.id !== id));
-  };
-
+  // Adicionar
   const addMesh = (mesh: Mesh) => {
-    setMeshes(prev => [...prev, mesh]);
+    setMeshes((prev) => [...prev, mesh]);
   };
 
-  const updateMesh = (updatedMesh: Mesh) => {
-    setMeshes(prev => prev.map(m => m.id === updatedMesh.id ? updatedMesh : m));
+  // Atualizar
+  const updateMesh = (mesh: Mesh) => {
+    setMeshes((prev) => prev.map((m) => (m.id === mesh.id ? mesh : m)));
+  };
+
+  // Deletar
+  const deleteMesh = (id: string) => {
+    setMeshes((prev) => prev.filter((m) => m.id !== id));
   };
 
   return (
-    <SupplierContext.Provider value={{ 
-        suppliers, meshes, 
-        addSupplier, updateSupplier, deleteSupplier, 
-        addMesh, updateMesh, setMeshes 
-    }}>
+    <SupplierContext.Provider value={{ suppliers, meshes, addMesh, updateMesh, deleteMesh }}>
       {children}
     </SupplierContext.Provider>
   );
 }
 
+// Hook para usar os dados
 export function useSupplierContext() {
   const context = useContext(SupplierContext);
   if (context === undefined) {

@@ -1,41 +1,31 @@
-import type { Metadata } from 'next';
-import { Inter } from 'next/font/google';
-import './globals.css';
-// Importação segura assumindo app/context
-import { SupplierProvider } from './context/SupplierContext';
+import type { Metadata } from "next";
+import { Montserrat } from "next/font/google";
+import "./globals.css";
+import { SupplierProvider } from "@/app/context/SupplierContext"; // <--- IMPORTANTE
 
-const inter = Inter({ subsets: ['latin'] });
+// Configurando a fonte do manual da marca
+const montserrat = Montserrat({ 
+  subsets: ["latin"],
+  variable: '--font-montserrat',
+  weight: ['300', '400', '500', '600', '700']
+});
 
 export const metadata: Metadata = {
-  title: 'Sowbrand',
-  description: 'Gestão de Malhas',
+  title: "Sowbrand System",
+  description: "Gestão de Malhas e Preços",
 };
 
 export default function RootLayout({
   children,
-}: {
+}: Readonly<{
   children: React.ReactNode;
-}) {
+}>) {
   return (
     <html lang="pt-BR">
-      <body className={inter.className}>
+      <body className={`${montserrat.variable} font-sans bg-[#FDFDFD] text-[#545454] antialiased`}>
+        {/* O erro acontecia porque este Provider estava faltando ou mal configurado */}
         <SupplierProvider>
-            {/* Header Fixo */}
-            <header className="bg-white border-b sticky top-0 z-50 shadow-sm">
-              <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-16 flex items-center justify-between">
-                <div className="flex items-center gap-2">
-                  <div className="h-8 w-8 bg-blue-600 rounded-lg flex items-center justify-center text-white font-bold">S</div>
-                  <span className="text-xl font-bold text-gray-900">Sow<span className="text-gray-500">brand</span></span>
-                </div>
-                <nav className="flex space-x-6">
-                  <a href="/" className="text-gray-600 hover:text-blue-600 font-medium transition-colors">Fornecedores</a>
-                  <a href="/compare" className="text-gray-600 hover:text-blue-600 font-medium transition-colors">Comparador</a>
-                  <a href="/manage" className="text-gray-600 hover:text-blue-600 font-medium transition-colors">Gerenciar</a>
-                </nav>
-              </div>
-            </header>
-            
-            {children}
+          {children}
         </SupplierProvider>
       </body>
     </html>
