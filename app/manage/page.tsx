@@ -1,149 +1,178 @@
 'use client';
 
 import React, { useState } from 'react';
-// Caminho relativo para types (saindo de app/manage -> app -> raiz -> types)
-import { Supplier } from '../../types'; 
-import { Trash2, Edit2, Plus, Save, Building2 } from 'lucide-react';
-// Caminho relativo para context (saindo de app/manage -> app -> context)
-import { useSupplierContext } from '../context/SupplierContext';
+import { useSupplierContext } from '@/app/context/SupplierContext';
+import { ArrowLeft, Plus, Edit2, Trash2, User, Phone, Mail, Save, X } from 'lucide-react';
+import Link from 'next/link';
+import { Supplier } from '@/types';
 
 export default function ManageSuppliers() {
   const { suppliers, addSupplier, updateSupplier, deleteSupplier } = useSupplierContext();
   
-  const [isAdding, setIsAdding] = useState(false);
-  const [editingId, setEditingId] = useState<string | null>(null);
-  
-  const [formData, setFormData] = useState({ 
-    name: '', 
-    email: '', 
-    phone: '' 
-  });
+  const [isEditing, setIsEditing] = useState(false);
+  const [formData, setFormData] = useState<Supplier>({ id: '', name: '', contact: '', phone: '', email: '' });
 
-  const startAdd = () => {
-    setFormData({ name: '', email: '', phone: '' });
-    setIsAdding(true);
-    setEditingId(null);
+  const handleEdit = (supplier: Supplier) => {
+    setFormData(supplier);
+    setIsEditing(true);
   };
 
-  const startEdit = (supplier: Supplier) => {
-    setFormData({ 
-        name: supplier.name, 
-        email: supplier.email || '', 
-        phone: supplier.phone || '' 
-    });
-    setEditingId(supplier.id);
-    setIsAdding(false);
+  const handleNew = () => {
+    setFormData({ id: Math.random().toString(36).substr(2, 9), name: '', contact: '', phone: '', email: '' });
+    setIsEditing(true);
   };
 
-  const handleSave = () => {
-    if (!formData.name.trim()) {
-        alert("O nome é obrigatório");
-        return;
-    }
+  const handleSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!formData.name) return;
 
-    if (editingId) {
-      updateSupplier(editingId, formData);
-      setEditingId(null);
+    // Verifica se é edição (já existe na lista) ou novo
+    const exists = suppliers.find(s => s.id === formData.id);
+    
+    if (exists) {
+        updateSupplier(formData);
     } else {
-      const newSupplier: Supplier = {
-        id: Date.now().toString(),
-        name: formData.name,
-        email: formData.email,
-        phone: formData.phone
-      };
-      addSupplier(newSupplier);
-      setIsAdding(false);
+        addSupplier(formData);
     }
-    setFormData({ name: '', email: '', phone: '' });
+    
+    setIsEditing(false);
   };
 
   const handleDelete = (id: string) => {
-    if (confirm('Tem certeza? Isso pode afetar malhas vinculadas.')) {
-      deleteSupplier(id);
+    if (confirm('Tem certeza que deseja excluir este fornecedor?')) {
+        deleteSupplier(id);
     }
   };
 
-  const handleCancel = () => {
-      setIsAdding(false);
-      setEditingId(null);
-      setFormData({ name: '', email: '', phone: '' });
-  };
-
   return (
-    <div className="max-w-5xl mx-auto p-6">
-      <div className="flex justify-between items-center mb-8">
-        <div>
-            <h1 className="text-3xl font-bold text-gray-900">Gerenciar Fornecedores</h1>
-            <p className="text-gray-500">Adicione, edite ou remova parceiros comerciais.</p>
-        </div>
-      </div>
-
-      <div className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
-        <div className="p-6 border-b border-gray-100 flex justify-between items-center bg-gray-50">
-          <h2 className="text-lg font-semibold flex items-center gap-2 text-gray-800">
-            <Building2 size={20} className="text-gray-400"/>
-            Lista de Fornecedores <span className="text-sm font-normal text-gray-500">({suppliers.length})</span>
-          </h2>
-          {!isAdding && !editingId && (
-              <button 
-                onClick={startAdd}
-                className="flex items-center gap-2 bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700 transition-colors font-medium text-sm"
-              >
-                <Plus size={18} /> Novo Fornecedor
-              </button>
-          )}
-        </div>
-
-        {(isAdding || editingId) && (
-          <div className="p-6 bg-blue-50 border-b border-blue-100">
-            <h3 className="font-bold text-blue-800 mb-4">{isAdding ? 'Novo Cadastro' : 'Editando Fornecedor'}</h3>
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-4">
-                <div>
-                    <label className="block text-xs font-semibold text-blue-800 mb-1">Nome *</label>
-                    <input type="text" value={formData.name} onChange={(e) => setFormData({...formData, name: e.target.value})} className="w-full p-2 border rounded" />
-                </div>
-                <div>
-                    <label className="block text-xs font-semibold text-blue-800 mb-1">Email</label>
-                    <input type="email" value={formData.email} onChange={(e) => setFormData({...formData, email: e.target.value})} className="w-full p-2 border rounded" />
-                </div>
-                <div>
-                    <label className="block text-xs font-semibold text-blue-800 mb-1">Telefone</label>
-                    <input type="text" value={formData.phone} onChange={(e) => setFormData({...formData, phone: e.target.value})} className="w-full p-2 border rounded" />
-                </div>
-            </div>
-            <div className="flex gap-2 justify-end">
-                <button onClick={handleCancel} className="px-4 py-2 text-gray-600 hover:bg-white rounded-lg">Cancelar</button>
-                <button onClick={handleSave} className="flex items-center gap-2 bg-blue-600 text-white px-6 py-2 rounded-lg hover:bg-blue-700 font-medium"><Save size={18} /> Salvar</button>
-            </div>
+    <div className="min-h-screen bg-[#FDFDFD] p-6 font-sans">
+      <div className="max-w-4xl mx-auto">
+        
+        {/* Cabeçalho */}
+        <div className="flex items-center gap-6 mb-10">
+          <Link href="/" className="p-3 bg-white rounded-full shadow-sm border border-gray-100 hover:border-[#72BF03] transition-all group">
+            <ArrowLeft size={20} className="text-[#545454] group-hover:text-[#72BF03]" />
+          </Link>
+          <div>
+            <h1 className="text-3xl font-bold text-black font-heading tracking-tight">Fornecedores</h1>
+            <p className="text-[#545454] opacity-60 font-medium text-sm">Gerencie sua base de parceiros</p>
           </div>
-        )}
+        </div>
 
-        <div className="divide-y divide-gray-100">
-          {suppliers.length > 0 ? (
-              suppliers.map(supplier => (
-                <div key={supplier.id} className={`p-4 flex items-center justify-between hover:bg-gray-50 transition-colors ${editingId === supplier.id ? 'bg-blue-50' : ''}`}>
-                  <div className="flex items-center gap-4">
-                    <div className="h-10 w-10 bg-gray-100 rounded-full flex items-center justify-center text-gray-500 font-bold text-sm">
-                        {supplier.name.substring(0,2).toUpperCase()}
+        {/* Lista ou Formulário */}
+        {isEditing ? (
+            <div className="bg-white p-8 rounded-2xl shadow-xl border border-gray-100 max-w-2xl mx-auto">
+                <div className="flex justify-between items-center mb-6 border-b border-gray-100 pb-4">
+                    <h2 className="text-xl font-bold text-black flex items-center gap-2">
+                        {suppliers.find(s => s.id === formData.id) ? 'Editar Fornecedor' : 'Novo Fornecedor'}
+                    </h2>
+                    <button onClick={() => setIsEditing(false)} className="text-gray-400 hover:text-red-500">
+                        <X size={24} />
+                    </button>
+                </div>
+
+                <form onSubmit={handleSubmit} className="space-y-5">
+                    <div>
+                        <label className="block text-xs font-bold text-[#545454] uppercase mb-1">Nome da Empresa *</label>
+                        <input 
+                            className="w-full border border-gray-300 rounded-lg p-3 text-sm focus:ring-1 focus:ring-[#72BF03] outline-none text-black"
+                            value={formData.name}
+                            onChange={e => setFormData({...formData, name: e.target.value})}
+                            required
+                            placeholder="Ex: Urbano Têxtil"
+                        />
                     </div>
                     <div>
-                        <p className="font-semibold text-gray-900">{supplier.name}</p>
-                        <div className="flex gap-3 text-xs text-gray-500">
-                            <span>ID: {supplier.id}</span>
-                            {supplier.email && <span>• {supplier.email}</span>}
+                        <label className="block text-xs font-bold text-[#545454] uppercase mb-1">Nome do Contato</label>
+                        <input 
+                            className="w-full border border-gray-300 rounded-lg p-3 text-sm focus:ring-1 focus:ring-[#72BF03] outline-none text-black"
+                            value={formData.contact}
+                            onChange={e => setFormData({...formData, contact: e.target.value})}
+                            placeholder="Ex: Carlos Vendas"
+                        />
+                    </div>
+                    <div className="grid grid-cols-2 gap-4">
+                        <div>
+                            <label className="block text-xs font-bold text-[#545454] uppercase mb-1">Telefone / WhatsApp</label>
+                            <input 
+                                className="w-full border border-gray-300 rounded-lg p-3 text-sm focus:ring-1 focus:ring-[#72BF03] outline-none text-black"
+                                value={formData.phone}
+                                onChange={e => setFormData({...formData, phone: e.target.value})}
+                                placeholder="(00) 00000-0000"
+                            />
+                        </div>
+                        <div>
+                            <label className="block text-xs font-bold text-[#545454] uppercase mb-1">E-mail</label>
+                            <input 
+                                className="w-full border border-gray-300 rounded-lg p-3 text-sm focus:ring-1 focus:ring-[#72BF03] outline-none text-black"
+                                value={formData.email}
+                                onChange={e => setFormData({...formData, email: e.target.value})}
+                                placeholder="contato@empresa.com"
+                            />
                         </div>
                     </div>
-                  </div>
-                  <div className="flex items-center gap-2">
-                    <button onClick={() => startEdit(supplier)} disabled={!!editingId} className="p-2 text-blue-600 hover:bg-blue-100 rounded-full"><Edit2 size={18} /></button>
-                    <button onClick={() => handleDelete(supplier.id)} disabled={!!editingId} className="p-2 text-red-500 hover:bg-red-100 rounded-full"><Trash2 size={18} /></button>
-                  </div>
-                </div>
-              ))
-          ) : (
-              <div className="p-12 text-center text-gray-500">Nenhum fornecedor cadastrado.</div>
-          )}
-        </div>
+
+                    <div className="flex justify-end gap-3 pt-6">
+                        <button type="button" onClick={() => setIsEditing(false)} className="px-5 py-3 text-sm font-bold text-[#545454] hover:bg-gray-50 rounded-lg">
+                            Cancelar
+                        </button>
+                        <button type="submit" className="px-8 py-3 bg-[#72BF03] text-white rounded-lg hover:bg-[#5da102] font-bold shadow-lg shadow-green-100 flex items-center gap-2">
+                            <Save size={18} /> Salvar
+                        </button>
+                    </div>
+                </form>
+            </div>
+        ) : (
+            <div className="grid grid-cols-1 gap-4">
+                <button 
+                    onClick={handleNew}
+                    className="bg-white border-2 border-dashed border-gray-200 rounded-xl p-4 flex items-center justify-center gap-2 text-[#545454] hover:border-[#72BF03] hover:text-[#72BF03] transition-all mb-4 group"
+                >
+                    <Plus size={20} className="group-hover:scale-110 transition-transform" />
+                    <span className="font-bold">Cadastrar Novo Fornecedor</span>
+                </button>
+
+                {suppliers.map(supplier => (
+                    <div key={supplier.id} className="bg-white p-6 rounded-xl border border-gray-100 shadow-sm flex flex-col md:flex-row justify-between items-start md:items-center gap-4 hover:shadow-md transition-shadow">
+                        <div>
+                            <h3 className="text-xl font-bold text-black mb-2">{supplier.name}</h3>
+                            <div className="flex flex-wrap gap-4 text-sm text-[#545454]">
+                                {supplier.contact && (
+                                    <div className="flex items-center gap-1.5 opacity-80">
+                                        <User size={14} /> {supplier.contact}
+                                    </div>
+                                )}
+                                {supplier.phone && (
+                                    <div className="flex items-center gap-1.5 opacity-80">
+                                        <Phone size={14} /> {supplier.phone}
+                                    </div>
+                                )}
+                                {supplier.email && (
+                                    <div className="flex items-center gap-1.5 opacity-80">
+                                        <Mail size={14} /> {supplier.email}
+                                    </div>
+                                )}
+                            </div>
+                        </div>
+                        <div className="flex gap-2">
+                            <button 
+                                onClick={() => handleEdit(supplier)}
+                                className="p-2 text-[#545454] hover:text-[#72BF03] hover:bg-gray-50 rounded-lg transition-colors"
+                            >
+                                <Edit2 size={18} />
+                            </button>
+                            <button 
+                                onClick={() => handleDelete(supplier.id)}
+                                className="p-2 text-[#545454] hover:text-red-500 hover:bg-red-50 rounded-lg transition-colors"
+                            >
+                                <Trash2 size={18} />
+                            </button>
+                        </div>
+                    </div>
+                ))}
+            </div>
+        )}
+
       </div>
     </div>
   );
